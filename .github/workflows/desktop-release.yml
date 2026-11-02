@@ -97,7 +97,8 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $GITHUB_REF_NAME already exists; the builds add to it."
           else
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Periskopos ${GITHUB_REF_NAME#v}" --generate-notes --draft --verify-tag
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Periskopos ${GITHUB_REF_NAME#v}" --generate-notes --draft --verify-tag \
+              --notes "The installers are unsigned for now: [what to expect the first time](https://periskopos.com/docs/getting-started/) and the [code signing policy](https://periskopos.com/docs/code-signing/)."
           fi
 
   build:
