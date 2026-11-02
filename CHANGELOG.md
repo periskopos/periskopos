@@ -4,7 +4,7 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
-## Next release
+## 0.3.8 (2026-11-02)
 
 - Windows and Linux: the ☰ menu button sits after Reload, before Minimize.
 
