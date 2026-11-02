@@ -21,6 +21,7 @@
   },
   "scripts": {
     "dev": "node scripts/dev.ts",
+    "version": "node scripts/changelog.ts && git add CHANGELOG.md",
     "build": "vite build -c web/vite.config.ts",
     "start": "node server/main.ts",
     "mcp": "node mcp/main.ts",

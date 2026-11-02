@@ -1,6 +1,11 @@
 # Releasing a new version
 
-For maintainers.
+For maintainers. The version lives in one place, `package.json`; the tag,
+the installers, the release, the changelog heading and the website all take
+it from there.
+
+First put the release's larger steps in `CHANGELOG.md` under
+`## Next release`, then:
 
 ```bash
 npm version minor
@@ -11,7 +16,10 @@ git push --follow-tags
 ```
 
 `npm version` (or `patch` / `major`) raises the version in `package.json`,
-commits it and tags it `v0.2.0`. Pushing the tag runs the **Desktop build**
+renames `## Next release` to `## 0.2.0 (<today>)` (`scripts/changelog.ts`),
+commits both and tags it `v0.2.0`. With no `## Next release` section it stops
+before committing or tagging; undo its bump with
+`git checkout package.json package-lock.json`. Pushing the tag runs the **Desktop build**
 workflow: it makes a **draft** release, then tests and builds Windows,
 macOS and Linux side by side, each adding its files to the draft. A
 platform whose build fails leaves its files out: rerun that job, or publish
@@ -29,7 +37,7 @@ without releasing; the installers are on the run's page.
 
 Publishing rebuilds [periskopos.com](https://periskopos.com),
 which shows the latest version and its [changelog](https://periskopos.com/docs/changelog/)
-(made from `CHANGELOG.md`: add the release's larger steps there before tagging).
+(made from `CHANGELOG.md`).
 It does this through the site's Cloudflare deploy hook, kept as the
 `SITE_DEPLOY_HOOK` repository secret; without the secret the job (`site-rebuild.yml`) is skipped.
 
