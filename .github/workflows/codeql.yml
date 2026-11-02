@@ -1,0 +1,75 @@
+name: CodeQL
+
+# GitHub's code scanning of the TypeScript and the workflows, on every push
+# to main, every pull request and once a week (new queries find old code).
+# Findings show under Security → Code scanning. GitHub only scans a private
+# repo with Advanced Security (paid), so while this one is private the scan
+# is skipped, and it starts by itself once the repo is public.
+#
+# Actions are pinned to a commit (the version is in the comment beside it);
+# Dependabot moves both together.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**", ".github/assets/**", "LICENSE", "NOTICE"]
+  pull_request:
+    paths-ignore: ["**.md", "docs/**", ".github/assets/**", "LICENSE", "NOTICE"]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Asked each time rather than read from the event: a scheduled run's event
+  # doesn't say.
+  visibility:
+    name: Is the repo public?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      public: ${{ steps.check.outputs.public }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          visibility="$(gh api "repos/$GITHUB_REPOSITORY" -q .visibility)"
+          echo "public=$([ "$visibility" = public ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          [ "$visibility" = public ] || echo "::notice::The repo is $visibility: code scanning starts once it's public."
+
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: visibility
+    if: needs.visibility.outputs.public == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # The analysis reads its own run's details; a private repo's token
+      # can't without this.
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}

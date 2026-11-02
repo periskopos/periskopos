@@ -1,0 +1,168 @@
+{
+  "name": "periskopos",
+  "version": "0.3.7",
+  "private": true,
+  "type": "module",
+  "description": "Every app you ship, watched from one window: a desktop app for uptime, deploys, configuration, errors and expiring certificates across your hosts and services, with your keys kept on your PC.",
+  "keywords": [
+    "monitoring",
+    "uptime",
+    "devops",
+    "deploys",
+    "desktop",
+    "electron",
+    "mcp",
+    "self-hosted"
+  ],
+  "homepage": "https://github.com/periskopos/periskopos#readme",
+  "bugs": "https://github.com/periskopos/periskopos/issues",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.ts",
+    "build": "vite build -c web/vite.config.ts",
+    "start": "node server/main.ts",
+    "mcp": "node mcp/main.ts",
+    "demo": "node scripts/demo.ts",
+    "demo:capture": "electron scripts/demo-capture.ts",
+    "install-service": "node scripts/service.ts install",
+    "uninstall-service": "node scripts/service.ts uninstall",
+    "service-status": "node scripts/service.ts status",
+    "test": "node --import ./test/setup.ts --test \"test/*.test.ts\"",
+    "typecheck": "tsc -p .",
+    "check": "npm run typecheck && npm test && npm run build",
+    "prepare-icon": "electron desktop/build/prepare-icon.ts",
+    "desktop": "npm run build && npm run build-preload && electron desktop/main.ts",
+    "desktop:pack": "npm run build && npm run build-preload && npm run prepare-icon && electron-builder --dir --publish never",
+    "desktop:dist": "npm run build && npm run build-preload && npm run prepare-icon && electron-builder --publish never",
+    "build-preload": "node desktop/build/build-preload.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "electron-updater": "^6.8.11",
+    "hono": "^4.13.14",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@types/node": "^24.19.2",
+    "deno": "^2.9.6",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "happy-dom": "^21.0.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  },
+  "allowScripts": {
+    "deno": true,
+    "electron": true
+  },
+  "main": "desktop/main.ts",
+  "author": "Daniel Noam Tuby <hello@periskopos.com>",
+  "license": "Apache-2.0",
+  "repository": "github:periskopos/periskopos",
+  "build": {
+    "appId": "com.periskopos.app",
+    "productName": "Periskopos",
+    "executableName": "periskopos",
+    "asar": false,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release/${os}",
+      "buildResources": "desktop/build"
+    },
+    "files": [
+      "desktop/**/*",
+      "!desktop/build/**",
+      "desktop/build/preload.cjs",
+      "!desktop/resources/**",
+      "server/**/*",
+      "shared/**/*",
+      "mcp/**/*",
+      "templates/**/*",
+      "dist/web/**/*",
+      "package.json",
+      "LICENSE",
+      "NOTICE",
+      "!**/*.test.ts"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop/build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "desktop/build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "desktop/build/menu",
+        "to": "menu"
+      }
+    ],
+    "win": {
+      "icon": "desktop/build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "guid": "21c4eead-07c1-5ef9-9841-551e74bfee05",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "Periskopos-Setup-${version}-${arch}.${ext}"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "desktop/build/icon.png",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Periskopos-macOS-${version}-${arch}.${ext}"
+    },
+    "protocols": [
+      {
+        "name": "Periskopos",
+        "schemes": [
+          "periskopos"
+        ]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "periskopos",
+        "repo": "periskopos",
+        "private": false,
+        "releaseType": "release"
+      }
+    ],
+    "linux": {
+      "icon": "desktop/build/icon.png",
+      "category": "Development",
+      "target": [
+        "AppImage"
+      ],
+      "artifactName": "Periskopos-${version}-${arch}.${ext}"
+    }
+  }
+}

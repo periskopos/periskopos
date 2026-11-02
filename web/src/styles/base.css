@@ -1,0 +1,189 @@
+/*
+ * Periskopos's styles, built only from tokens.css, one file per area
+ * (web/src/styles). main.ts loads them in this order: base, shell,
+ * components, fleet, app, accounts, panels, and responsive last, since it
+ * adjusts the others.
+ * Mission control: neutrals carry structure, colour is for status, labels
+ * are small mono capitals, figures are tabular.
+ */
+
+/* ── Base ───────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Every size is in rem, so this one value scales the whole window: 16px up
+   to a 1440px-wide window, then growing to 18px by 2560px, so a big screen
+   reads at a distance instead of showing a small strip in the middle. */
+html {
+  -webkit-text-size-adjust: 100%;
+  font-size: clamp(1rem, 0.84rem + 0.18vw, 1.125rem);
+}
+
+/* Scrollbars: a thin rounded thumb in the app's neutrals, no track or
+   arrows, darkening on hover, so a scrolling panel looks like the rest of
+   the window instead of the system's grey bar. Chromium (the desktop app)
+   takes the ::-webkit-scrollbar rules; other browsers the standard ones. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-scrollbar-thumb) transparent;
+  }
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-scrollbar-thumb);
+  background-clip: padding-box;
+  border: 2px solid transparent; /* an inset pill, clear of the window's edge */
+  border-radius: 999px;
+  min-height: 32px;
+  transition: background-color var(--duration-fast);
+}
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--color-scrollbar-thumb-hover);
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+/* Author styles like `display: flex` would otherwise beat `hidden`. */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd,
+ul,
+ol {
+  margin: 0;
+}
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+h1 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-title);
+}
+h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-title);
+}
+
+a {
+  color: var(--color-text-link);
+  text-decoration: none;
+  border-radius: var(--border-radius-sm);
+}
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+:focus-visible {
+  /* Transparent, not none: Windows' high-contrast mode drops shadows and
+     draws outlines in its own colour, so focus stays visible there. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+code {
+  font-family: var(--font-family-mono);
+  font-size: 0.92em;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent-primary) 35%, transparent);
+}
+
+/* ── Type roles ─────────────────────────────────────────────────────── */
+
+/* Small mono capitals: section and figure labels. */
+.label {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.meta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.secondary {
+  color: var(--color-text-secondary);
+}
+/* A section's own explanation is supporting text, the size of a field's
+   hint: the section's title and controls stay the loudest things in it. */
+.section .secondary {
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.mono {
+  font-family: var(--font-family-mono);
+}
+
+.num,
+time,
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+.hash {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

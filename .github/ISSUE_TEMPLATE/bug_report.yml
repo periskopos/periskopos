@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in Periskopos doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Found a security problem? Don't file it here: use **Security → Report a vulnerability** instead (see SECURITY.md)."
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      placeholder: "1. Connect a Cloudflare account\n2. …"
+  - type: input
+    id: version
+    attributes:
+      label: Periskopos version
+      description: The update button in the title bar shows it.
+      placeholder: "0.2.36"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS, Linux]
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: "Help → Report an issue (the ☰ button at the top right, or Alt, on Windows and Linux) copies them for you (or Settings → Data → Copy diagnostics): the version, the system, what kinds of accounts are connected, recent problems and crashes. Keys, addresses and app names are taken out."
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Log lines
+      description: "File → Show log. Paste what's relevant; check it has no keys or private addresses in it first."
+      render: text

@@ -1,0 +1,198 @@
+/* ── Touch: 44px targets ────────────────────────────────────────────── */
+
+@media (pointer: coarse) {
+  .btn,
+  .btn--sm,
+  .nav a,
+  .tabs a,
+  .chip {
+    min-height: 44px;
+  }
+  /* A chip that only labels (an incident's parts) isn't a target. */
+  .chip--static {
+    min-height: 0;
+  }
+  .btn--sm {
+    padding: 0 var(--space-4);
+  }
+  input:not([type="checkbox"]),
+  select {
+    min-height: 44px;
+  }
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+
+/* By the page's own width (about a 1024px window at 16px text), so the
+   columns fold where the page runs out of room, whatever the text size. */
+@container page (max-width: 60rem) {
+  /* An app's Settings menu: a row of buttons above the part. */
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+  .side-menu {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .side-menu a {
+    border: var(--border-width) solid var(--color-border-default);
+  }
+  .side-menu a[aria-current="page"] {
+    box-shadow: none;
+    border-color: var(--color-text-primary);
+  }
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .figure:nth-child(3) {
+    border-left: 0;
+  }
+  .figure:nth-child(n + 3) {
+    border-top: var(--border-width) solid var(--color-border-subtle);
+  }
+  .board .col-checked,
+  .board .col-uptime,
+  .board .col-numbers {
+    display: none;
+  }
+}
+
+@media (max-width: 599px) {
+  /* Event rows: the date above what it's about. */
+  .event-row,
+  .event-list--nested .event-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+  /* A card's verdict pill drops under its title, so the title keeps its width. */
+  .account-head {
+    flex-wrap: wrap;
+  }
+  .account-title {
+    flex: 1 1 calc(100% - 3rem);
+  }
+  .account-head .health-pill {
+    margin-left: calc(2rem + var(--space-3));
+  }
+  /* A Status card's three numbers, one under another. */
+  .figures--three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .figures--three .figure {
+    border-left: 0;
+    border-top: var(--border-width) solid var(--color-border-subtle);
+  }
+  .figures--three .figure:first-child {
+    border-top: 0;
+  }
+  /* An account's rows: the label above its value. */
+  .account-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fact dt {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+  .fact dd {
+    padding-top: var(--space-1);
+  }
+  .fact-line {
+    flex-wrap: wrap;
+  }
+  .topbar {
+    --topbar-gap: var(--space-2);
+  }
+  .brand-name {
+    display: none;
+  }
+  /* The title bar has to fit the window's narrowest: the version is still
+     in Settings → About, and the window's own buttons get narrower. */
+  .version-tag {
+    display: none;
+  }
+  .window-controls-btn,
+  .notify-btn,
+  .update-btn {
+    width: 2.25rem;
+  }
+  /* The title bar's panels can't hang off a button here: they'd run off
+     the left edge. They span the window instead, under the title bar. */
+  .notify-panel,
+  .update-panel {
+    position: fixed;
+    top: calc(var(--topbar-height) + var(--space-1));
+    left: var(--space-4);
+    right: var(--space-4);
+    width: auto;
+    max-width: none;
+  }
+  .nav a {
+    padding: 0 var(--space-2);
+  }
+  .row-figures {
+    display: block;
+  }
+  .page {
+    padding-top: var(--space-6);
+    gap: var(--space-4);
+  }
+  .figure-value {
+    font-size: var(--font-size-xl);
+  }
+  .form-row,
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .banner {
+    flex-wrap: wrap;
+  }
+  .banner .meta {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  /* The board becomes stacked rows. */
+  .board thead {
+    display: none;
+  }
+  .board,
+  .board tbody,
+  .board tr,
+  .board td {
+    display: block;
+  }
+  .board tr {
+    padding: var(--space-3) var(--space-4);
+    border-top: var(--border-width) solid var(--color-border-subtle);
+  }
+  .board tbody tr:first-child {
+    border-top: 0;
+  }
+  .board td {
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+  .board .col-state,
+  .board .col-response,
+  .board .col-push.is-empty {
+    display: none;
+  }
+  .board .col-push {
+    margin: var(--space-1) 0 0 calc(var(--lamp-size) + var(--space-3));
+    font-size: var(--font-size-sm);
+  }
+  .item {
+    flex-wrap: wrap;
+  }
+  .item-end {
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+  }
+}

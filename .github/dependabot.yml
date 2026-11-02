@@ -1,0 +1,23 @@
+# Dependency updates once a month, grouped into one pull request per
+# ecosystem so they're reviewed together. @types/node stays on 24 to match
+# the Node the project runs on (CONTRIBUTING.md → Tools).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

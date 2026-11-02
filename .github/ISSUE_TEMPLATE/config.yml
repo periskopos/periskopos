@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://github.com/periskopos/periskopos/discussions
+    about: Setting it up, how something works, or an idea to talk through first.
+  - name: Report a security problem
+    url: https://github.com/periskopos/periskopos/security/advisories/new
+    about: Privately, so it can be fixed before it's public.

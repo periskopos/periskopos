@@ -1,0 +1,27 @@
+name: Rebuild periskopos.com
+
+# periskopos.com shows the latest version and this repo's CHANGELOG.md, read
+# when the site builds. When you publish a release (the Desktop build leaves
+# it a draft), this asks Cloudflare to build the site again. The secret is
+# the site's deploy hook URL (Cloudflare → Workers & Pages → periskopos-com →
+# Settings → Builds → Deploy Hooks); without it the job is skipped.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  site:
+    name: Rebuild periskopos.com
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the site's deploy hook
+        env:
+          HOOK: ${{ secrets.SITE_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "::notice::SITE_DEPLOY_HOOK isn't set; the site keeps its version until its next build."; exit 0; fi
+          curl -fsS --max-time 30 -X POST "$HOOK" -o /dev/null && echo "Site build started."

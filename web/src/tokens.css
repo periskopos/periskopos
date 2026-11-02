@@ -1,0 +1,185 @@
+/*
+ * Periskopos design tokens.
+ *
+ * Philosophy: mission control — a calm instrument panel. Neutrals carry
+ * everything; colour is reserved for status, so a problem is the loudest
+ * thing on screen. Dark is the primary theme; light follows the system.
+ * Every text/surface pair here is checked: text ≥ 4.5:1, field borders and
+ * focus ≥ 3:1, in both themes.
+ *
+ * Components use the semantic tokens (--color-*, --space-*, …), never raw
+ * values.
+ */
+
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+:root {
+  color-scheme: dark;
+
+  /* ── Surfaces: cool near-black, stepped by a few % of light ─────────── */
+  --color-bg-canvas: #0b0d10; /* page */
+  --color-bg-surface: #111418; /* sections, table body */
+  --color-bg-raised: #171b21; /* row hover, selected tab, menus */
+  --color-bg-sunken: #0e1114; /* inputs, code */
+  --color-bg-inverse: #e6e9ee; /* primary button */
+
+  /* ── Text ───────────────────────────────────────────────────────────── */
+  --color-text-primary: #e6e9ee;
+  --color-text-secondary: #a4adba; /* labels, supporting text */
+  --color-text-tertiary: #8a93a1; /* metadata: times, hashes, hints */
+  --color-text-inverse: #0b0d10;
+  --color-text-link: #79b8ff;
+
+  /* ── Lines ──────────────────────────────────────────────────────────── */
+  --color-border-subtle: #1c2128; /* row dividers (decorative) */
+  --color-border-default: #262c34; /* section outlines */
+  --color-border-strong: #626b79; /* field outlines (≥ 3:1) */
+  --color-border-focus: #79b8ff;
+  --color-scrollbar-thumb: #2a3039; /* a quiet pill, there when needed */
+  --color-scrollbar-thumb-hover: #4a525e;
+
+  /* ── Accent: interaction only (focus, links, selected) ──────────────── */
+  --color-accent-primary: #79b8ff;
+  --color-accent-primary-hover: #a5cdff;
+
+  /* ── Status: the only colours that carry meaning ────────────────────── */
+  --color-status-up: #3fb950;
+  --color-status-up-tint: #0f2417;
+  --color-status-down: #ff6b61;
+  --color-status-down-tint: #2a1215;
+  --color-status-attention: #f0883e;
+  --color-status-attention-tint: #2b1a0e;
+  --color-status-info: #58a6ff; /* deploying, checking, in progress */
+  --color-status-info-tint: #0d1d33;
+  --color-status-unknown: #8b949e;
+  --color-status-unknown-tint: #161a1f;
+
+  /* ── Type ───────────────────────────────────────────────────────────── */
+  --font-family-body: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-family-mono: "Geist Mono Variable", ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+
+  --font-size-xs: 0.6875rem; /* 11px — small-caps labels */
+  --font-size-sm: 0.75rem; /* 12px — metadata */
+  --font-size-md: 0.8125rem; /* 13px — rows, controls */
+  --font-size-base: 0.875rem; /* 14px — body */
+  --font-size-lg: 1rem; /* 16px — section titles */
+  --font-size-xl: 1.25rem; /* 20px — page titles */
+  --font-size-2xl: 1.5rem; /* 24px — figures */
+  --font-size-3xl: 2rem; /* 32px — the headline figure */
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.35;
+  --line-height-normal: 1.5;
+
+  --letter-spacing-label: 0.06em; /* small caps labels */
+  --letter-spacing-title: -0.01em;
+
+  /* ── Space: 4px base ────────────────────────────────────────────────── */
+  --space-0: 0;
+  --space-1: 0.25rem; /* 4 */
+  --space-2: 0.5rem; /* 8 */
+  --space-3: 0.75rem; /* 12 */
+  --space-4: 1rem; /* 16 */
+  --space-5: 1.25rem; /* 20 */
+  --space-6: 1.5rem; /* 24 */
+  --space-8: 2rem; /* 32 */
+  --space-10: 2.5rem; /* 40 */
+  --space-12: 3rem; /* 48 */
+
+  /* ── Shape: precise, small radii ────────────────────────────────────── */
+  --border-width: 1px;
+  --border-radius-sm: 4px; /* chips, lamps' frames, code */
+  --border-radius-md: 6px; /* controls, inputs */
+  --border-radius-lg: 8px; /* sections */
+  --border-radius-full: 999px;
+
+  /* ── Depth: dark relies on borders, not shadows ─────────────────────── */
+  --shadow-sm: none;
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.45);
+  --focus-ring: 0 0 0 2px var(--color-bg-canvas), 0 0 0 4px var(--color-border-focus);
+
+  /* ── Motion: feedback and arrivals (styles/motion.css) ──────────────── */
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-page: 240ms;
+  --duration-pulse: 1.4s;
+  --easing-default: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ── Layout ─────────────────────────────────────────────────────────── */
+  --layout-max-width: 70rem; /* 1120px: reading pages, Settings */
+  --layout-max-width-wide: 100rem; /* 1600px: pages of apps and numbers */
+  --layout-gutter: clamp(1rem, 3vw, 3rem);
+  --row-height: 2.75rem; /* 44px: dense, still a comfortable target */
+  --lamp-size: 0.5rem;
+  --topbar-height: 3.25rem;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    /* Not an inversion: a cool paper canvas with white surfaces. */
+    --color-bg-canvas: #f5f6f8;
+    --color-bg-surface: #ffffff;
+    --color-bg-raised: #f0f2f5;
+    --color-bg-sunken: #f7f8fa;
+    --color-bg-inverse: #0f1419;
+
+    --color-text-primary: #0f1419;
+    --color-text-secondary: #4b5563;
+    --color-text-tertiary: #5d6673;
+    --color-text-inverse: #ffffff;
+    --color-text-link: #0b62d6;
+
+    --color-border-subtle: #eceef1;
+    --color-border-default: #dfe2e7;
+    --color-border-strong: #7c8592;
+    --color-border-focus: #0b62d6;
+    --color-scrollbar-thumb: #cfd4db;
+    --color-scrollbar-thumb-hover: #9aa2ad;
+
+    --color-accent-primary: #0b62d6;
+    --color-accent-primary-hover: #084fae;
+
+    /* Status hues darkened so the words stay readable on white. */
+    --color-status-up: #1a7f37;
+    --color-status-up-tint: #e8f5ec;
+    --color-status-down: #c9252d;
+    --color-status-down-tint: #fdecec;
+    --color-status-attention: #b5480b;
+    --color-status-attention-tint: #fdf0e6;
+    --color-status-info: #0b62d6;
+    --color-status-info-tint: #e8f0fc;
+    --color-status-unknown: #5d6673;
+    --color-status-unknown-tint: #f0f2f5;
+
+    /* Light needs a little lift; dark doesn't. */
+    --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
+    --shadow-md: 0 8px 24px rgb(16 24 40 / 0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-page: 0ms;
+    --duration-pulse: 0ms;
+  }
+}
+
+/*
+ * Status lamps: colour AND shape, so state never depends on colour alone.
+ *   up        small filled dot
+ *   down      filled square (the most different shape)
+ *   attention half-filled dot
+ *   info      dot with a pulse (deploying, checking)
+ *   unknown   hollow ring
+ *   none      dash
+ * Components draw them with .lamp + .lamp--<state>; see styles/components.css.
+ */

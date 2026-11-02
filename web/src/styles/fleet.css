@@ -1,0 +1,217 @@
+/* ── Fleet: the status board ────────────────────────────────────────── */
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.summary h1 {
+  font-size: var(--font-size-2xl);
+}
+
+.board {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-md);
+}
+.board th {
+  height: 2.25rem;
+  padding: 0 var(--space-4);
+  text-align: left;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  border-bottom: var(--border-width) solid var(--color-border-default);
+  white-space: nowrap;
+}
+.board td {
+  height: 3.5rem;
+  padding: var(--space-2) var(--space-4);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.board tbody tr:first-child td {
+  border-top: 0;
+}
+.board .num-col {
+  text-align: right;
+}
+.board tbody tr {
+  position: relative;
+  transition: background-color var(--duration-fast) var(--easing-default);
+}
+.board tbody tr:hover {
+  background: var(--color-bg-raised);
+}
+
+.app-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  white-space: normal;
+}
+.app-cell > div {
+  min-width: 0;
+}
+/* The app's own favicon, or its first letter until it has one. */
+.app-icon {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: var(--border-radius-sm);
+  object-fit: contain;
+}
+.app-icon--lg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+.app-icon--letter {
+  display: inline-grid;
+  place-items: center;
+  background: var(--color-bg-sunken);
+  border: var(--border-width) solid var(--color-border-default);
+  color: var(--color-text-secondary);
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+.app-icon--letter.app-icon--lg {
+  font-size: var(--font-size-md);
+}
+.app-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+/* The name's link covers the whole row. */
+.row-link {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+.row-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.row-link:hover {
+  text-decoration: none;
+}
+.row-link:focus-visible {
+  box-shadow: none;
+}
+.row-link:focus-visible::after {
+  box-shadow: inset 0 0 0 2px var(--color-border-focus);
+  border-radius: var(--border-radius-sm);
+}
+.reason {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+.reason--down {
+  color: var(--color-status-down);
+}
+.reason--attention {
+  color: var(--color-status-attention);
+}
+
+/* ── Apps: the List / Cards switch, and the cards ─────────────────────── */
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-sunken);
+}
+.segment {
+  min-height: 1.875rem;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: calc(var(--border-radius-md) - 2px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.segment[aria-pressed="true"] {
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
+  box-shadow: 0 0 0 var(--border-width) var(--color-border-strong);
+}
+.segment:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
+}
+
+.app-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: var(--space-3);
+}
+.app-card {
+  position: relative; /* the name's link covers the card */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-lg, var(--border-radius-md));
+  background: var(--color-bg-surface, var(--color-bg-raised));
+  transition: border-color var(--duration-fast) var(--easing-default), background-color var(--duration-fast) var(--easing-default);
+}
+.app-card:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-raised);
+}
+/* A problem shows from across the room: a coloured edge. */
+.app-card--down {
+  box-shadow: inset 3px 0 0 var(--color-status-down);
+}
+.app-card--attention {
+  box-shadow: inset 3px 0 0 var(--color-status-attention);
+}
+.app-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.app-card-head .row-link {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-card-state {
+  flex: none;
+  font-size: var(--font-size-sm);
+}
+.card-figures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+.card-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.card-figure dd {
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

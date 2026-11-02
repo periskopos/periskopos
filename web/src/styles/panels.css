@@ -1,0 +1,128 @@
+/* ── Toasts ─────────────────────────────────────────────────────────── */
+
+.toasts {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 24rem;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-raised);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-md);
+  animation: toast-in var(--duration-normal) var(--easing-default);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ── Centred panels: first run, add app, connect a service ──────────── */
+
+.narrow {
+  width: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+}
+.welcome {
+  margin-top: 10vh;
+}
+.welcome .brand-mark {
+  --tile: 13px;
+  --step: 15px;
+  width: 28px;
+  height: 28px;
+}
+
+/* Figures under the name: only where the columns are hidden (phones). */
+.row-figures {
+  display: none;
+  margin-top: 2px;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+/* ── The guided tour (tour.ts) ───────────────────────────────────────── */
+
+/* Above everything, toasts included: while it's open it's all you can use. */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.tour-backdrop {
+  position: absolute;
+  inset: 0;
+}
+/* The stop, lit: the page dims around it by the spotlight's own shadow. */
+.tour-spotlight {
+  position: fixed;
+  border-radius: var(--border-radius-md);
+  box-shadow:
+    0 0 0 2px var(--color-border-focus),
+    0 0 0 100vmax rgb(0 0 0 / 0.65);
+  pointer-events: none;
+  transition:
+    left var(--duration-normal) var(--easing-default),
+    top var(--duration-normal) var(--easing-default),
+    width var(--duration-normal) var(--easing-default),
+    height var(--duration-normal) var(--easing-default);
+}
+/* A stop with no target: nothing lit, the whole page dimmed. */
+.tour--centred .tour-spotlight {
+  inset: 50% auto auto 50%;
+  width: 0;
+  height: 0;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.65);
+}
+.tour-card {
+  position: fixed;
+  width: 20rem;
+  max-width: calc(100vw - 2 * var(--space-4));
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-lg);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  animation: popover-in var(--duration-normal) var(--easing-default);
+}
+.tour--centred .tour-card {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  animation: none;
+}
+.tour-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+.tour-text {
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-normal);
+}
+.tour-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.tour-skip {
+  margin-right: auto;
+}

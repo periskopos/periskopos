@@ -1,0 +1,457 @@
+/* ── App: header, tabs, banner, figures ─────────────────────────────── */
+
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.app-title h1 {
+  font-size: var(--font-size-2xl);
+}
+.app-url {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid;
+  border-radius: var(--border-radius-lg);
+  font-size: var(--font-size-md);
+}
+.banner strong {
+  font-weight: var(--font-weight-semibold);
+}
+.banner .meta {
+  margin-left: auto;
+}
+.banner--down {
+  border-color: color-mix(in srgb, var(--color-status-down) 45%, transparent);
+  background: var(--color-status-down-tint);
+  color: var(--color-status-down);
+}
+.banner--attention {
+  border-color: color-mix(in srgb, var(--color-status-attention) 45%, transparent);
+  background: var(--color-status-attention-tint);
+  color: var(--color-status-attention);
+}
+.banner--info {
+  border-color: color-mix(in srgb, var(--color-status-info) 40%, transparent);
+  background: var(--color-status-info-tint);
+  color: var(--color-status-info);
+}
+.banner--up {
+  border-color: color-mix(in srgb, var(--color-status-up) 35%, transparent);
+  background: var(--color-status-up-tint);
+  color: var(--color-status-up);
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  min-width: 0;
+  border-left: var(--border-width) solid var(--color-border-subtle);
+}
+.figure:first-child {
+  border-left: 0;
+}
+.figure-value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.figure-value.is-muted {
+  color: var(--color-text-tertiary);
+}
+.figure-note {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+/* A hint wraps to a second line instead of ending in "…". */
+.figure-note .figure-hint {
+  white-space: normal;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-6);
+  align-items: baseline;
+}
+.facts dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Settings → Backups: the folder's path, which is long and has no spaces. */
+.backups-dir {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* What the app reports about itself */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-4) var(--space-6);
+}
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.board .col-numbers {
+  max-width: 22rem;
+  white-space: nowrap;
+}
+.numbers {
+  display: block;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Code to copy: the endpoint file and its commands */
+.code {
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-sunken);
+  min-width: 0;
+}
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+.code-head code {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.code-body {
+  margin: 0;
+  padding: var(--space-3);
+  max-height: 22rem;
+  overflow: auto;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
+  white-space: pre;
+  tab-size: 2;
+}
+.code-body:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--color-border-focus);
+  border-radius: var(--border-radius-md);
+}
+.section-body > h3.label {
+  margin-top: var(--space-2);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 2rem;
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+}
+.chip:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+  text-decoration: none;
+}
+
+.commit {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.commit-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Uptime bars ────────────────────────────────────────────────────── */
+
+.uptime-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.uptime-figure {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.bars {
+  display: flex;
+  gap: 3px;
+  height: 2.5rem;
+  align-items: stretch;
+}
+.bar {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--color-bg-raised);
+  cursor: default;
+}
+.bar:not(.bar--up, .bar--warn, .bar--down) {
+  box-shadow: inset 0 0 0 1px var(--color-border-default);
+}
+.bar--up {
+  background: var(--color-status-up);
+  opacity: 0.85;
+}
+.bar--warn {
+  background: var(--color-status-attention);
+}
+.bar--down {
+  background: var(--color-status-down);
+}
+.bar:hover,
+.bar:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+.bar::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-raised);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  width: max-content;
+  max-width: 16rem;
+  pointer-events: none;
+  z-index: 5;
+  /* Out of the layout until shown: a hidden one past the edge would still
+     make a narrow window scroll sideways. */
+  display: none;
+}
+/* Near either end it opens inwards, so it stays in the window. */
+.bar:nth-child(-n + 6)::after {
+  left: 0;
+  transform: none;
+}
+.bar:nth-last-child(-n + 6)::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.bar:hover::after,
+.bar:focus-visible::after {
+  display: block;
+}
+.bars-axis {
+  display: flex;
+  justify-content: space-between;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--color-bg-raised);
+  border: var(--border-width) solid var(--color-border-default);
+}
+.swatch--up {
+  background: var(--color-status-up);
+  border-color: transparent;
+}
+.swatch--warn {
+  background: var(--color-status-attention);
+  border-color: transparent;
+}
+.swatch--down {
+  background: var(--color-status-down);
+  border-color: transparent;
+}
+
+/* ── Traffic: a Cloudflare domain's requests and visitors ─────────────── */
+
+.traffic-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.figures--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.tchart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.tchart-head {
+  display: flex;
+  justify-content: space-between;
+}
+.tchart {
+  display: block;
+  width: 100%;
+  height: 7rem;
+  overflow: visible;
+}
+/* One series, one colour: the accent, which keeps 3:1 on both surfaces. */
+.tchart-bar {
+  fill: var(--color-accent-primary);
+  opacity: 0.8;
+}
+.tchart-hit {
+  fill: transparent;
+}
+.tchart-base {
+  fill: var(--color-border-strong);
+}
+.tchart-col {
+  outline: 2px solid transparent; /* seen in high-contrast mode */
+}
+.tchart-col:hover .tchart-bar,
+.tchart-col:focus-visible .tchart-bar {
+  opacity: 1;
+  fill: var(--color-accent-primary-hover);
+}
+.tchart-col:focus-visible .tchart-hit {
+  fill: var(--color-bg-raised);
+}
+.tchart-table summary {
+  cursor: pointer;
+  width: max-content;
+}
+.tchart-table table {
+  width: 100%;
+  margin-top: var(--space-2);
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.tchart-table th,
+.tchart-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+  text-align: right;
+}
+.tchart-table th {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+.tchart-table th:first-child,
+.tchart-table td:first-child {
+  text-align: left;
+}
+.visitors {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.visitors-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.top-pages {
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--border-radius-md);
+}
+@media (max-width: 40rem) {
+  .traffic-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+/* An app's Settings: a short menu of its parts beside the chosen one. */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+.side-menu {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.side-menu a {
+  display: flex;
+  align-items: center;
+  height: 2.25rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+.side-menu a:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-raised);
+  text-decoration: none;
+}
+.side-menu a[aria-current="page"] {
+  color: var(--color-text-primary);
+  background: var(--color-bg-raised);
+  box-shadow: inset 2px 0 0 var(--color-text-primary);
+}

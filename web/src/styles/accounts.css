@@ -1,0 +1,813 @@
+/* ── Services ───────────────────────────────────────────────────────── */
+
+.service-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-sunken);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+/* Each account is a card: a header (logo, name, tags), what's known about
+   it, and a footer with what can be done, Remove set apart at the end. */
+.accounts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.account-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-card {
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+.account-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+.account-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1;
+}
+/* The card's verdict on its key, in one word, at the header's far end. */
+.health-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  height: 1.75rem;
+  padding: 0 var(--space-3);
+  border-radius: 999px;
+  border: var(--border-width) solid var(--color-border-default);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+.health-pill--up {
+  border-color: color-mix(in srgb, var(--color-status-up) 35%, transparent);
+  background: var(--color-status-up-tint);
+  color: var(--color-status-up);
+}
+.health-pill--down {
+  border-color: color-mix(in srgb, var(--color-status-down) 35%, transparent);
+  background: var(--color-status-down-tint);
+  color: var(--color-status-down);
+}
+.health-pill--attention {
+  border-color: color-mix(in srgb, var(--color-status-attention) 35%, transparent);
+  background: var(--color-status-attention-tint);
+  color: var(--color-status-attention);
+}
+/* What's known about the account, a labelled row each: the label in a
+   narrow column, the value and its one control beside it. */
+.account-facts {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  margin: 0;
+  padding: var(--space-1) var(--space-4);
+}
+.fact {
+  display: contents;
+}
+.fact dt,
+.fact dd {
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+.fact:last-child dt,
+.fact:last-child dd {
+  border-bottom: none;
+}
+.fact dt {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  line-height: 1.75rem;
+}
+.fact dd {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-md);
+}
+.fact-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  width: 100%;
+}
+.fact-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+  width: 100%;
+}
+.fact-action {
+  flex: none;
+}
+/* The provider's incidents and maintenance, folded under a count. */
+.provider-details summary {
+  cursor: pointer;
+  width: fit-content;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+.provider-details summary:hover {
+  color: var(--color-text-primary);
+}
+.provider-details[open] summary {
+  margin-bottom: var(--space-2);
+}
+.account-name {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.account-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.account-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-md);
+  min-width: 0;
+}
+.account-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  background: var(--color-bg-sunken);
+  border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
+}
+.account-remove {
+  margin-left: auto;
+}
+
+/* Each account's logo, drawn as a mask so it takes a colour: its brand
+   colour, or the text colour where the brand's is black (GitHub, Render)
+   and would vanish on a dark background. Logos: Simple Icons, CC0. */
+.service-logo {
+  width: 1.125rem;
+  height: 1.125rem;
+  background: var(--color-text-primary);
+  -webkit-mask: var(--logo) center / contain no-repeat;
+  mask: var(--logo) center / contain no-repeat;
+}
+.service-logo--github {
+  --logo: url("../logos/github.svg");
+}
+.service-logo--render {
+  --logo: url("../logos/render.svg");
+}
+.service-logo--cloudflare {
+  --logo: url("../logos/cloudflare.svg");
+  background: #f38020;
+}
+.service-logo--supabase {
+  --logo: url("../logos/supabase.svg");
+  background: #3fcf8e;
+}
+.service-logo--digitalocean {
+  --logo: url("../logos/digitalocean.svg");
+  background: #0080ff;
+}
+.service-logo--vercel {
+  --logo: url("../logos/vercel.svg");
+}
+.service-logo--netlify {
+  --logo: url("../logos/netlify.svg");
+  background: #00c7b7;
+}
+.service-logo--fly {
+  --logo: url("../logos/fly.svg");
+  background: #7b3be2;
+}
+.service-logo--railway {
+  --logo: url("../logos/railway.svg");
+}
+.service-logo--sentry {
+  --logo: url("../logos/sentry.svg");
+  background: #362d59;
+}
+.service-logo--stripe {
+  --logo: url("../logos/stripe.svg");
+  background: #635bff;
+}
+.service-logo--paddle {
+  --logo: url("../logos/paddle.svg");
+  background: #fddd35;
+}
+.service-logo--resend {
+  --logo: url("../logos/resend.svg");
+}
+.service-logo--gitlab {
+  --logo: url("../logos/gitlab.svg");
+  background: #fc6d26;
+}
+.service-logo--aws {
+  --logo: url("../logos/aws.svg");
+  background: #ff9900;
+}
+.service-logo--neon {
+  --logo: url("../logos/neon.svg");
+  background: #00e599;
+}
+.service-logo--mongodb {
+  --logo: url("../logos/mongodb.svg");
+  background: #47a248;
+}
+.service-logo--sendgrid {
+  --logo: url("../logos/sendgrid.svg");
+  background: #1a82e2;
+}
+.service-logo--google-analytics {
+  --logo: url("../logos/google-analytics.svg");
+  background: #e37400;
+}
+.service-logo--clerk {
+  --logo: url("../logos/clerk.svg");
+  background: #6c47ff;
+}
+.service-logo--openai {
+  --logo: url("../logos/openai.svg");
+}
+.service-logo--search-console {
+  --logo: url("../logos/search-console.svg");
+  background: #4285f4;
+}
+
+/* A lamp, then a sentence: the text flows inline, so on a narrow window it
+   wraps like one (a " · " never starts a line), and the lamp stays beside
+   its first line. */
+.key-line {
+  position: relative;
+  display: block;
+  padding-left: calc(var(--lamp-size) + var(--space-2));
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.key-line > .lamp {
+  position: absolute;
+  left: 0;
+  top: calc(0.75em - var(--lamp-size) / 2);
+}
+.key-line > .lamp--none {
+  top: calc(0.75em - 1px); /* a 2px dash, not a dot */
+}
+
+/* ── Connecting a service: numbered steps ───────────────────────────── */
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border-default);
+}
+.step-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-md);
+}
+.step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-bg-sunken);
+  border: var(--border-width) solid var(--color-border-strong);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-2);
+}
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+}
+.choice > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.choice input {
+  width: auto;
+  min-height: 0;
+  margin-top: 0.4rem;
+}
+.choice--on,
+.choice:has(input:checked) {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-sunken);
+}
+.choice:has(input:focus-visible) {
+  outline: 2px solid var(--color-border-strong);
+  outline-offset: 2px;
+}
+.steps {
+  list-style: decimal;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+}
+.advanced summary {
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+.advanced[open] summary {
+  margin-bottom: var(--space-2);
+}
+.inline-panel {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+}
+
+/* ── A provider's status on the Accounts page ─────────────────────────── */
+
+.provider-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.provider-incidents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-4);
+}
+.provider-incidents li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+.provider-incidents .tag {
+  margin-left: var(--space-2);
+}
+/* Trouble elsewhere at the provider: listed, but quieter. */
+.provider-incidents .is-elsewhere {
+  opacity: 0.75;
+}
+
+/* A free plan's usage: a thin bar per limit, amber near it, red over it. */
+.usage {
+  display: grid;
+  gap: var(--space-2);
+}
+.usage-meter {
+  display: grid;
+  gap: var(--space-1);
+}
+.usage-bar {
+  display: block;
+  height: 4px;
+  max-width: 24rem;
+  border-radius: 999px;
+  background: var(--color-bg-raised);
+  overflow: hidden;
+}
+.usage-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-status-up);
+}
+.usage-meter--near .usage-fill {
+  background: var(--color-status-attention);
+}
+.usage-meter--over .usage-fill {
+  background: var(--color-status-down);
+}
+
+/* ── Status ─────────────────────────────────────────────────────────── */
+
+/* A provider my apps use: its parts, what's wrong and planned, its apps. */
+.status-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+.status-body h4 {
+  margin: 0;
+}
+/* The parts my apps use, a tile each. */
+.parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.part {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-sunken);
+}
+.part > .meta {
+  grid-column: 2;
+}
+.part-name {
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.part--attention {
+  border-color: color-mix(in srgb, var(--color-status-attention) 40%, transparent);
+  background: var(--color-status-attention-tint);
+}
+.part--down {
+  border-color: color-mix(in srgb, var(--color-status-down) 40%, transparent);
+  background: var(--color-status-down-tint);
+}
+.part--info {
+  border-color: color-mix(in srgb, var(--color-status-info) 40%, transparent);
+  background: var(--color-status-info-tint);
+}
+.status-brief .account-head {
+  border-bottom: none;
+}
+.provider-details summary .lamp {
+  vertical-align: middle;
+}
+.part-names {
+  margin: 0;
+  line-height: var(--line-height-relaxed, 1.6);
+}
+
+/* A Status card: the provider's overall state under its name, three numbers
+   in a strip, what's wrong, the rest folded, and the apps it serves. */
+.overall {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+.figures--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.status-strip {
+  border: none;
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.status-card .status-body + .status-more,
+.status-card .status-strip + .status-more {
+  border-top: none;
+}
+.status-more {
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+.status-more > summary {
+  cursor: pointer;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+.status-more > summary:hover {
+  color: var(--color-text-primary);
+}
+.status-more[open] > summary {
+  padding-bottom: 0;
+}
+.status-card > .status-body {
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+.parts--compact {
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+}
+.parts--compact .part {
+  padding: var(--space-1) var(--space-2);
+}
+.status-foot {
+  gap: var(--space-3);
+}
+.status-foot .label {
+  flex: none;
+}
+
+/* An incident affecting my apps: a card, edged by its impact. */
+.incident-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.incident-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border-default);
+  border-left-width: 3px;
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-sunken);
+}
+.incident-card--attention {
+  border-left-color: var(--color-status-attention);
+  background: color-mix(in srgb, var(--color-status-attention-tint) 60%, var(--color-bg-sunken));
+}
+.incident-card--down {
+  border-left-color: var(--color-status-down);
+  background: color-mix(in srgb, var(--color-status-down-tint) 60%, var(--color-bg-sunken));
+}
+.incident-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.incident-title {
+  font-weight: var(--font-weight-semibold);
+}
+.incident-update {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+}
+.incident-parts .chip {
+  height: 1.5rem;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-sm);
+}
+.chip--static {
+  cursor: default;
+}
+.chip--static:hover {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-default);
+}
+.chip.is-yours {
+  color: var(--color-text-primary);
+  border-color: var(--color-status-attention);
+}
+
+/* Other incidents and maintenance: quiet rows, the date in its own column. */
+.event-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.event-row {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+  font-size: var(--font-size-md);
+}
+.event-row:last-child {
+  border-bottom: none;
+}
+.event-row.is-elsewhere {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.event-date {
+  display: flex;
+  flex-direction: column;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+}
+.event-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.event-main summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.event-row.is-yours .event-date {
+  color: var(--color-status-info);
+}
+.event-list--nested {
+  margin-top: var(--space-2);
+}
+.event-list--nested .event-row {
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+}
+
+/* ── AI assistants ──────────────────────────────────────────────────── */
+
+.notice--attention {
+  border-color: color-mix(in srgb, var(--color-status-attention) 40%, transparent);
+  background: var(--color-status-attention-tint);
+}
+.notice--attention strong {
+  color: var(--color-text-primary);
+}
+/* What came of an assistant's request, coloured by how it went. */
+.tag--up {
+  color: var(--color-status-up);
+  border-color: color-mix(in srgb, var(--color-status-up) 40%, transparent);
+}
+.tag--info {
+  color: var(--color-status-info);
+  border-color: color-mix(in srgb, var(--color-status-info) 40%, transparent);
+}
+.tag--attention {
+  color: var(--color-status-attention);
+  border-color: color-mix(in srgb, var(--color-status-attention) 40%, transparent);
+}
+.tag--down {
+  color: var(--color-status-down);
+  border-color: color-mix(in srgb, var(--color-status-down) 40%, transparent);
+}
+.app-picks {
+  padding-left: var(--space-2);
+}
+.rule-row {
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+.rule-row:last-child {
+  border-bottom: none;
+}
+.rule-row select {
+  width: auto;
+  flex: none;
+}
+.rule-row .tag {
+  margin-left: var(--space-2);
+}
+.audit-tools {
+  margin-bottom: var(--space-2);
+}
+.audit-tools select {
+  width: auto;
+}
+.audit-row {
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+}
+
+/* Settings → AI assistants: the connection line, its checks, the setup. */
+.account-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.connection-line {
+  font-size: var(--font-size-md);
+  margin: 0 0 var(--space-3);
+}
+.connection-facts {
+  padding: var(--space-1) 0;
+  margin: var(--space-3) 0;
+}
+.connect-steps .code {
+  margin: 0;
+}
+
+/* Accounts by kind: the picker always, the Accounts page past a few. */
+.choice-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.choice-group-label,
+.account-group-label {
+  margin: 0 0 var(--space-2);
+}
+.account-group {
+  display: flex;
+  flex-direction: column;
+}
+.account-group + .account-group {
+  margin-top: var(--space-3);
+}
+.account-kinds {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* An app's Configuration tab: each finding, its fix, and what to paste. */
+.finding-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.finding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+.finding:first-child {
+  border-top: none;
+}
+.finding-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.finding-title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+.finding-source {
+  margin-left: auto;
+}
+.finding p {
+  margin: 0;
+}
+.finding-fix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.finding-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.finding-foot .btn {
+  margin-left: auto;
+}
+.config-notes {
+  margin-top: var(--space-2);
+}
+.config-ignored summary {
+  padding: var(--space-3) var(--space-4);
+}
+.log-message {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diagnostics-text {
+  width: 100%;
+  font-size: var(--font-size-xs);
+}

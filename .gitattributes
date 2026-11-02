@@ -1,0 +1,4 @@
+# Text files are LF in the repository and in every checkout, on every
+# platform: the files are written that way, and Git stops converting them
+# (and warning "LF will be replaced by CRLF") on Windows.
+* text=auto eol=lf

@@ -1,0 +1,389 @@
+/* ── Shell ──────────────────────────────────────────────────────────── */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: var(--topbar-height);
+  /* The space between the title bar's items, in one place: the update
+     button and the window's buttons close it up between them. */
+  --topbar-gap: var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--topbar-gap);
+  padding: 0 var(--layout-gutter);
+  background: color-mix(in srgb, var(--color-bg-canvas) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: var(--border-width) solid var(--color-border-default);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-title);
+  white-space: nowrap;
+}
+.brand:hover {
+  text-decoration: none;
+}
+/* The app's version, right after the logo. */
+.tag.version-tag {
+  margin-left: calc(var(--space-2) - var(--space-6)); /* closer than the bar's usual gap */
+  color: var(--color-text-tertiary);
+  text-transform: none;
+  white-space: nowrap;
+}
+
+/* The fleet mark of icon.svg: one tile drawn, its shadows the other two,
+   and the top-right status lamp lit in the status green (its own element:
+   a shadow takes its tile's square shape). */
+.brand-mark {
+  --tile: 8px;
+  --step: 10px;
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.brand-mark::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tile);
+  height: var(--tile);
+  border-radius: calc(var(--tile) / 4);
+  background: var(--color-text-secondary);
+  box-shadow:
+    0 var(--step) 0 var(--color-text-secondary),
+    var(--step) var(--step) 0 var(--color-text-primary);
+}
+.brand-mark::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--step);
+  width: var(--tile);
+  height: var(--tile);
+  border-radius: 50%;
+  background: var(--color-status-up);
+}
+
+.nav {
+  display: flex;
+  gap: var(--space-1);
+}
+.nav a {
+  display: inline-flex;
+  align-items: center;
+  height: 2rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+}
+.nav a:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-raised);
+  text-decoration: none;
+}
+.nav a[aria-current="page"] {
+  color: var(--color-text-primary);
+  background: var(--color-bg-raised);
+}
+
+/* The desktop app's frameless window: with no native title bar, the top bar is
+   the title bar. Dragging it moves the window; everything clickable in it opts
+   back out of the drag region. Plain browser tabs ignore -webkit-app-region. */
+body.is-desktop-shell .topbar {
+  -webkit-app-region: drag;
+  user-select: none;
+  padding-right: 0;
+}
+body.is-desktop-shell .topbar a,
+body.is-desktop-shell .notify,
+body.is-desktop-shell .update,
+body.is-desktop-shell .window-controls {
+  -webkit-app-region: no-drag;
+}
+/* A Mac keeps its traffic lights, at the left: make room for them. */
+body.is-darwin .topbar {
+  padding-left: 5.25rem;
+  padding-right: var(--layout-gutter);
+}
+
+/* The title bar's buttons at the right: notifications, updates, then the
+   window's own, flush in one row. Each opens a panel under it. */
+.notify,
+.update {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-self: stretch;
+  margin-left: auto;
+}
+.topbar .notify ~ .update,
+.topbar .notify ~ .window-controls,
+.topbar .update ~ .window-controls {
+  margin-left: calc(-1 * var(--topbar-gap));
+}
+.notify-btn,
+.update-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.875rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.notify-btn:hover,
+.notify-btn[aria-expanded="true"],
+.update-btn:hover,
+.update-btn[aria-expanded="true"] {
+  background: var(--color-bg-raised);
+}
+.notify-btn:focus-visible,
+.update-btn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+/* An update is waiting: news, not a problem, so the info colour. */
+.update-dot {
+  position: absolute;
+  top: calc(50% - 0.6rem);
+  right: 0.8rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: var(--border-radius-full);
+  background: var(--color-status-info);
+  box-shadow: 0 0 0 2px var(--color-bg-canvas);
+}
+.notify-panel,
+.update-panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: var(--space-2);
+  z-index: 20;
+  width: 18rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-sm);
+  cursor: default;
+}
+.notify-panel[hidden],
+.update-panel[hidden] {
+  display: none;
+}
+/* The count of things to look at, in the worst one's colour. */
+.notify-badge {
+  position: absolute;
+  top: calc(50% - 0.95rem);
+  right: 0.45rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: var(--border-radius-full);
+  background: var(--color-status-attention);
+  color: var(--color-text-inverse);
+  font-family: var(--font-family-mono);
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1rem;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--color-bg-canvas);
+}
+.notify-badge--down {
+  background: var(--color-status-down);
+}
+.notify-badge--unknown {
+  background: var(--color-status-unknown);
+}
+.notify-panel {
+  width: 22rem;
+  max-width: calc(100vw - 2 * var(--space-4));
+  gap: var(--space-3);
+}
+.notify-head {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+.notify-subhead {
+  margin-top: var(--space-1);
+}
+.notify-list {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.notify-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  margin: 0 calc(-1 * var(--space-2));
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+}
+.notify-item:hover {
+  text-decoration: none;
+  background: var(--color-bg-raised);
+}
+.notify-item .lamp {
+  margin-top: 0.3rem;
+}
+.notify-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.notify-item-title {
+  font-weight: var(--font-weight-medium);
+}
+.notify-item-text {
+  overflow-wrap: anywhere;
+}
+.notify-all {
+  font-size: var(--font-size-sm);
+}
+
+.update-version {
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+.update-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+.update-status--ready::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: var(--border-radius-full);
+  background: var(--color-status-info);
+}
+.update-detail {
+  line-height: 1.45;
+}
+.update-spinner {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1.5px solid var(--color-border-strong);
+  border-top-color: var(--color-status-info);
+  border-radius: var(--border-radius-full);
+  animation: update-spin 0.9s linear infinite;
+}
+@keyframes update-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.window-controls {
+  display: flex;
+  flex: none;
+  align-self: stretch;
+  margin-left: auto;
+}
+.window-controls-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.875rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.window-controls-btn:hover {
+  background: var(--color-bg-raised);
+}
+.window-controls-btn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+.window-controls-btn--close:hover {
+  background: var(--color-status-down);
+  color: #fff;
+}
+.window-controls-icon {
+  display: flex;
+}
+
+/* The page is a container, so its parts lay out by the room they have
+   (@container page), not by the window's width. */
+.page {
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--space-8) var(--layout-gutter) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  container: page / inline-size;
+}
+/* Apps, Status and Accounts are lists and numbers: they take the room. A
+   form or a settings menu inside one keeps the reading width. */
+.page--wide {
+  max-width: var(--layout-max-width-wide);
+}
+.page--wide:has(.settings-layout) {
+  max-width: var(--layout-max-width);
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.page-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Back to the list: a real button, above the page's title. */
+.back-button {
+  align-self: flex-start;
+  margin-bottom: var(--space-2);
+  padding: 0 var(--space-3);
+}
+
+.crumb {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+.crumb a {
+  color: var(--color-text-tertiary);
+}
+.crumb a:hover {
+  color: var(--color-text-primary);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}

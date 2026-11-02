@@ -1,0 +1,89 @@
+name: Checks
+
+# Type-checks, tests and builds the UI on every push to main and every pull
+# request: `npm run check`, the same as the release build runs before it
+# makes an installer (desktop-release.yml). A broken push shows here, not
+# in the next release.
+#
+# On Windows, like the release build and the PC Periskopos runs on, and
+# on Linux, which also stands in for macOS: what differs by platform (paths,
+# finding which process holds a port: PowerShell there, lsof and ps here)
+# is tested on both.
+#
+# Actions are pinned to a commit (the version is in the comment beside it);
+# Dependabot moves both together.
+
+on:
+  push:
+    branches: [main]
+    # Words and pictures only: nothing for the checks to look at.
+    paths-ignore: ["**.md", "docs/**", ".github/assets/**", "LICENSE", "NOTICE"]
+  pull_request:
+    paths-ignore: ["**.md", "docs/**", ".github/assets/**", "LICENSE", "NOTICE"]
+  workflow_dispatch:
+
+# A newer push makes an older run of the same branch pointless.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Type-check, test, build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      # One platform failing shouldn't hide whether the other passes.
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      # The checks need no Electron binary (the desktop code is tested
+      # without it), so Electron's own download step isn't run.
+      - run: npm ci --no-audit --no-fund
+
+      - run: npm run check
+
+  # The packaged app, the way a release makes it but without an installer:
+  # a file left out of package.json's `files`, or an icon that won't build,
+  # shows here instead of on release day.
+  pack:
+    name: Package the desktop app (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      # The icon is drawn by Electron, so this job needs its binary.
+      - run: node node_modules/electron/install.js
+
+      - run: npm run desktop:pack
+
+      - name: Check what was packed
+        shell: bash
+        run: |
+          app=release/win/win-unpacked
+          for f in periskopos.exe resources/app/server/main.ts resources/app/desktop/main.ts resources/app/dist/web/index.html; do
+            test -e "$app/$f" || { echo "Missing from the package: $f"; exit 1; }
+          done

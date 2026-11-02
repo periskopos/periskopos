@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Periskopos's mark: the fleet, one tile per app, and in the top-right
+       a status lamp lit green for "all well". The tray turns that lamp amber
+       or red when something needs attention (tray-glance.ts). Dark theme's
+       colours; prepare-icon turns this into icon.png and icon.ico. -->
+  <rect width="512" height="512" rx="118" fill="#0b0d10"/>
+  <rect x="88" y="88" width="150" height="150" rx="36" fill="#a4adba"/>
+  <circle cx="349" cy="163" r="72" fill="#3fb950"/>
+  <rect x="88" y="274" width="150" height="150" rx="36" fill="#a4adba"/>
+  <rect x="274" y="274" width="150" height="150" rx="36" fill="#e6e9ee"/>
+</svg>

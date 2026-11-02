@@ -1,0 +1,82 @@
+/*
+ * Motion: small, quick and only where something changes under you: a page
+ * opening, a panel dropping from its button, the board switching layout,
+ * hovers settling. Nothing here moves on the minute-by-minute refresh (views
+ * mount their page once per route; what redraws in place has no animation),
+ * and all of it is off when the system asks for reduced motion.
+ */
+
+/* A page opens: it fades in and rises a few pixels; the top bar stays put. */
+.page {
+  animation: page-in var(--duration-page) var(--easing-default);
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* The bell's and the update button's panels grow from the button's corner. */
+.notify-panel:not([hidden]),
+.update-panel:not([hidden]) {
+  transform-origin: top right;
+  animation: popover-in var(--duration-normal) var(--easing-default);
+}
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+/* List ↔ Cards: the board cross-fades instead of jumping. */
+.board-switching {
+  animation: board-in var(--duration-normal) var(--easing-default);
+}
+@keyframes board-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Hovers settle rather than snap. */
+.nav a,
+.tabs a,
+.segment {
+  transition:
+    color var(--duration-fast) var(--easing-default),
+    background-color var(--duration-fast) var(--easing-default),
+    box-shadow var(--duration-fast) var(--easing-default);
+}
+.btn {
+  transition:
+    background-color var(--duration-fast) var(--easing-default),
+    border-color var(--duration-fast) var(--easing-default),
+    transform var(--duration-fast) var(--easing-default);
+}
+
+/* A card lifts a little under the pointer. */
+.app-card {
+  transition:
+    border-color var(--duration-fast) var(--easing-default),
+    background-color var(--duration-fast) var(--easing-default),
+    transform var(--duration-fast) var(--easing-default),
+    box-shadow var(--duration-fast) var(--easing-default);
+}
+.app-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Reduced motion: the duration tokens are already zero (tokens.css); the
+   hover lift goes too, so nothing shifts at all. */
+@media (prefers-reduced-motion: reduce) {
+  .app-card:hover {
+    transform: none;
+  }
+  /* Its words already say it's checking. */
+  .update-spinner {
+    animation: none;
+  }
+}

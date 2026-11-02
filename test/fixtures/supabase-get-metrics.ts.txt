@@ -1,0 +1,29 @@
+// The worked example on periskopos.com (docs/protocol/supabase-example) shows
+// this getMetrics(); keep the two the same. test/protocol.test.ts type-checks it
+// under Deno, inside the generated template, against the real supabase-js.
+export async function getMetrics(): Promise<Metric[]> {
+  const supabase = await admin();
+
+  const { count: saved, error: savedError } = await supabase
+    .from("saved_items")
+    .select("*", { count: "exact", head: true });
+  if (savedError) throw savedError;
+
+  // Accounts live in Supabase Auth: count them page by page.
+  const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+  let accounts = 0;
+  let signupsThisWeek = 0;
+  for (let page = 1; ; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    accounts += data.users.length;
+    signupsThisWeek += data.users.filter((u) => Date.parse(u.created_at) >= weekAgo).length;
+    if (data.users.length < 1000) break;
+  }
+
+  return [
+    { id: "users", label: "Accounts", value: accounts },
+    { id: "saved_items", label: "Saved items", value: saved ?? 0 },
+    { id: "signups_week", label: "Sign-ups this week", value: signupsThisWeek, hint: "last 7 days" },
+  ];
+}

@@ -1,0 +1,16 @@
+name: Feature or new provider
+description: Something Periskopos should do, or a host or service it should know
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The problem, in your own words, before any solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: "For a new provider: which one, what you'd want to see (deploys, status, traffic…), and whether it has an API token that can be read-only."

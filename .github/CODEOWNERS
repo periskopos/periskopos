@@ -1,0 +1,21 @@
+# Who reviews what. Every pull request needs the owner's review once branch
+# protection on main asks for it; the paths below are listed so that stays
+# true if more maintainers join: keys, agent safety, releases and CI never
+# change without the owner.
+
+*                         @DanielNoamTuby
+
+# Keys, the session key and what agents may do (docs/AGENT-SAFETY.md)
+/server/keys/             @DanielNoamTuby
+/server/security.ts       @DanielNoamTuby
+/server/agents/           @DanielNoamTuby
+/desktop/keys-key.ts      @DanielNoamTuby
+/server/routes/agents.ts  @DanielNoamTuby
+/mcp/                     @DanielNoamTuby
+/docs/AGENT-SAFETY.md     @DanielNoamTuby
+
+# Releases, updates and CI
+/.github/                 @DanielNoamTuby
+/desktop/update*.ts       @DanielNoamTuby
+/package.json             @DanielNoamTuby
+/package-lock.json        @DanielNoamTuby

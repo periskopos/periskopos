@@ -1,0 +1,561 @@
+/* ── Sections ───────────────────────────────────────────────────────── */
+
+.section {
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+.section-head a {
+  font-size: var(--font-size-sm);
+}
+.section-body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.section-body:empty {
+  display: none;
+}
+.section > .list {
+  padding: 0 var(--space-4);
+}
+.section-foot {
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+.section.is-danger {
+  border-color: color-mix(in srgb, var(--color-status-down) 30%, var(--color-border-default));
+}
+
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.stack-sm:empty {
+  display: none;
+}
+.inline-date {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.inline-date input {
+  width: auto;
+  min-height: 1.75rem;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-sm);
+}
+.page-body,
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+.welcome.stack {
+  gap: var(--space-4);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+.columns > :only-child {
+  grid-column: 1 / -1;
+}
+
+/* An app's Overview: its parts, then what happened to it. Side by side
+   once the page has the room; the second column reads as the sidebar. */
+.overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-6);
+}
+@container page (min-width: 70rem) {
+  .overview-grid {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+.section-body > .empty {
+  padding: 0;
+}
+
+.empty {
+  padding: var(--space-6) var(--space-4);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-md);
+}
+.empty-hero {
+  padding: var(--space-12) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+.empty-hero p {
+  max-width: 28rem;
+  color: var(--color-text-secondary);
+}
+
+/* ── Lists: aligned rows ────────────────────────────────────────────── */
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--row-height);
+  padding: var(--space-2) 0;
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  font-size: var(--font-size-md);
+}
+.item:first-child {
+  border-top: 0;
+}
+.item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.item-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.item-end {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: right;
+}
+/* A few to pick from (Get more): the list sits beside its button, as small. */
+.item-end--choose {
+  gap: var(--space-2);
+}
+.item-end--choose select {
+  min-height: 1.75rem;
+  height: 1.75rem;
+  max-width: 14rem;
+  padding-block: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+
+/* ── Status: lamp + word (shape AND colour) ─────────────────────────── */
+
+.lamp {
+  flex: none;
+  display: inline-block;
+  width: var(--lamp-size);
+  height: var(--lamp-size);
+  border-radius: 50%;
+  background: var(--color-status-unknown);
+}
+.lamp--lg {
+  --lamp-size: 0.75rem;
+}
+.lamp--up {
+  background: var(--color-status-up);
+}
+.lamp--down {
+  border-radius: 1px;
+  background: var(--color-status-down);
+  transform: scale(1.05);
+}
+.lamp--attention {
+  background: linear-gradient(90deg, var(--color-status-attention) 50%, transparent 50%);
+  box-shadow: inset 0 0 0 1.5px var(--color-status-attention);
+}
+.lamp--info,
+.lamp--checking {
+  background: var(--color-status-info);
+  animation: lamp-pulse var(--duration-pulse) ease-in-out infinite;
+}
+.lamp--unknown {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--color-status-unknown);
+}
+/* Not live yet: a dashed ring, plainly different from "unknown" (solid ring) */
+.lamp--prelaunch {
+  background: transparent;
+  box-shadow: none;
+  border: 1.5px dashed var(--color-status-unknown);
+}
+.lamp--none {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-text-tertiary);
+}
+
+@keyframes lamp-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-status-info) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-status-info) 0%, transparent);
+  }
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.status--down {
+  color: var(--color-status-down);
+}
+.status--attention {
+  color: var(--color-status-attention);
+}
+.status--info,
+.status--checking {
+  color: var(--color-status-info);
+}
+.status-ms {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-tertiary);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 1.25rem;
+  padding: 0 var(--space-2);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-sm);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 2.25rem;
+  padding: 0 var(--space-4);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--easing-default),
+    border-color var(--duration-fast) var(--easing-default);
+}
+.btn:hover {
+  background: var(--color-bg-raised);
+  border-color: var(--color-border-strong);
+  text-decoration: none;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled,
+.btn[aria-busy="true"] {
+  opacity: 0.6;
+  cursor: progress;
+  transform: none;
+}
+.btn--primary {
+  background: var(--color-bg-inverse);
+  border-color: var(--color-bg-inverse);
+  color: var(--color-text-inverse);
+}
+.btn--primary:hover {
+  background: color-mix(in srgb, var(--color-bg-inverse) 88%, var(--color-bg-canvas));
+  border-color: transparent;
+}
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-secondary);
+}
+.btn--ghost:hover {
+  color: var(--color-text-primary);
+}
+/* Quiet at rest: red is for an app that's down, and a row of Remove
+   buttons shouldn't outshine one. It turns red when it's about to be
+   pressed; the confirm dialog's solid button is the red one. */
+.btn--danger:hover,
+.btn--danger:focus-visible {
+  color: var(--color-status-down);
+  border-color: var(--color-status-down);
+  background: var(--color-status-down-tint);
+}
+.btn--danger-solid {
+  background: var(--color-status-down);
+  border-color: var(--color-status-down);
+  color: var(--color-text-inverse);
+}
+.btn--danger-solid:hover {
+  background: color-mix(in srgb, var(--color-status-down) 88%, var(--color-bg-canvas));
+  border-color: transparent;
+}
+.actions--end {
+  justify-content: flex-end;
+}
+.banner-text {
+  margin-left: 0;
+  white-space: normal;
+  min-width: 0;
+  flex: 1;
+}
+
+/* The confirmation: a native dialog, so focus stays inside it. */
+dialog.dialog {
+  width: min(32rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-lg);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-md);
+}
+dialog.dialog::backdrop {
+  background: color-mix(in srgb, var(--color-bg-canvas) 72%, transparent);
+  backdrop-filter: blur(2px);
+}
+dialog.dialog[open] {
+  animation: dialog-in var(--duration-normal) var(--easing-default);
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.btn--sm {
+  height: 1.75rem;
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+/* ── Forms ──────────────────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.field-label {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+.field-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-sunken);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-base);
+  transition: border-color var(--duration-fast) var(--easing-default);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--color-text-tertiary);
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--color-border-focus);
+}
+select {
+  width: auto;
+  max-width: 100%;
+  cursor: pointer;
+}
+.field > select {
+  align-self: flex-start;
+  min-width: 12rem;
+}
+.form-row .field > select {
+  align-self: stretch;
+  min-width: 0;
+}
+/* Empty slots (extra fields, errors) take no gap until they hold something. */
+.form > :empty,
+.form-row > :empty {
+  display: none;
+}
+select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+textarea {
+  resize: vertical;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+.check input {
+  width: 1rem;
+  min-height: 0;
+  height: 1rem;
+  margin: 0.15rem 0 0;
+  flex: none;
+  accent-color: var(--color-accent-primary);
+}
+.check > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notice {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-sunken);
+  font-size: var(--font-size-md);
+}
+.notice .lamp {
+  margin-top: 0.4rem;
+}
+.notice--error {
+  border-color: color-mix(in srgb, var(--color-status-down) 40%, transparent);
+  background: var(--color-status-down-tint);
+  color: var(--color-status-down);
+}
+.notice--ok {
+  border-color: color-mix(in srgb, var(--color-status-up) 40%, transparent);
+  background: var(--color-status-up-tint);
+  color: var(--color-status-up);
+}
+
+/* A list item with more under it: a status check and its settings. */
+.item--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.disclosure > summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  width: fit-content;
+}
+.disclosure[open] > summary {
+  margin-bottom: var(--space-2);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+/* Tabs: an app's Overview / History / Settings, and Settings' own. */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: var(--border-width) solid var(--color-border-default);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 2.5rem;
+  padding: 0 var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
+}
+.tabs a:hover {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+.tabs a[aria-current="page"] {
+  color: var(--color-text-primary);
+}
+.tabs a[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-text-primary);
+}

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+data/
+.env
+.env.*
+!.env.example
+*.log
+release/
+desktop/build/icon.png
+desktop/build/icon.ico
+desktop/build/menu/
+desktop/build/preload.cjs
+
+# Local Claude Code setup (kept in the private notes repo)
+.claude/

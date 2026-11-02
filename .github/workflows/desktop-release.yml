@@ -1,0 +1,199 @@
+name: Desktop build
+
+# Builds the Periskopos desktop app for Windows (installer), macOS (disk
+# image and zip, Apple silicon and Intel) and Linux (AppImage). Each needs
+# its own kind of machine, which is what this is for.
+#
+# - Push a tag like v0.2.0 (`npm version minor` makes the commit and the tag;
+#   then `git push --follow-tags`): builds all three and uploads them to one
+#   draft release in this repo. Nothing ships
+#   until you open the draft on GitHub, check it and click Publish: only then
+#   do the installed apps see the update (and periskopos.com rebuild, in
+#   site-rebuild.yml). Each build job uploads its own files: release
+#   files don't count against the account's Actions storage, artifacts do, and
+#   the free plan's 0.5 GB a month ran out in October 2026 (uploads then fail
+#   until the month turns, whatever is still stored).
+# - Run it by hand from the Actions tab: builds the platforms you tick
+#   (Windows by default; macOS and Linux too when ticked), and keeps the
+#   installers as the run's artifacts without releasing anything.
+#
+# Unsigned: Windows SmartScreen says "unknown publisher", and macOS won't
+# open the app until it's allowed in System Settings → Privacy & Security
+# (Open Anyway); an unsigned Mac app can't update itself either, so it says
+# when there's a new version instead (desktop/update-plan.ts). A macOS
+# runner's minutes count ten times against a private repo's free 2,000 a
+# month: a release's Mac build uses about 150 of them.
+#
+# Actions are pinned to a commit (the version is in the comment beside it);
+# Dependabot moves both together.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: Build Windows (installer)
+        default: true
+        type: boolean
+      build_mac:
+        description: Build macOS (disk image)
+        default: false
+        type: boolean
+      build_linux:
+        description: Build Linux (AppImage)
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Which platforms to build: all three for a release, what was ticked by hand.
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - id: plan
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          WIN: ${{ inputs.build_windows }}
+          MAC: ${{ inputs.build_mac }}
+          LINUX: ${{ inputs.build_linux }}
+        run: |
+          items=()
+          if [ "$EVENT" = push ] || [ "$WIN" = true ]; then items+=('{"os":"windows-latest","platform":"win"}'); fi
+          if [ "$EVENT" = push ] || [ "$MAC" = true ]; then items+=('{"os":"macos-latest","platform":"mac"}'); fi
+          if [ "$EVENT" = push ] || [ "$LINUX" = true ]; then items+=('{"os":"ubuntu-latest","platform":"linux"}'); fi
+          if [ ${#items[@]} -eq 0 ]; then echo "::error::Tick at least one platform."; exit 1; fi
+          matrix="{\"include\":[$(IFS=,; echo "${items[*]}")]}"
+          echo "$matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  # A release's builds each add their files to one draft, made first so
+  # they don't race to create it.
+  draft:
+    name: Draft the release
+    needs: plan
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # to make the draft
+    steps:
+      - name: Make the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; the builds add to it."
+          else
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Periskopos ${GITHUB_REF_NAME#v}" --generate-notes --draft --verify-tag
+          fi
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: [plan, draft]
+    # By hand the draft job is skipped, and the builds still run.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.draft.result != 'failure' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: write # to add the files to the draft
+    strategy:
+      # One platform failing shouldn't hide whether the others build.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      # A release's tag and the app's version must agree: the app compares
+      # its own version with the release's to know it's out of date.
+      - name: Check the tag matches package.json
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match package.json version $version. Use npm version to make both."
+            exit 1
+          fi
+
+      - run: npm ci --no-audit --no-fund
+
+      # npm doesn't run Electron's own install step (it downloads the binary);
+      # the icon step needs that binary.
+      - run: node node_modules/electron/install.js
+
+      - name: Type-check and test
+        run: npm run check
+
+      # On Linux, Electron's sandbox helper must be owned by root with the
+      # setuid bit (npm can't do that), or Electron refuses to start; the icon
+      # step renders with Electron.
+      - name: Let Electron use its sandbox (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+
+      # Linux has no display on the runner.
+      - name: Build the installer
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          if [ "$PLATFORM" = linux ]; then xvfb-run -a npm run desktop:dist; else npm run desktop:dist; fi
+
+      # The installers, plus what the updater reads: latest*.yml says which
+      # version is newest, the .blockmap files let it download only what changed.
+      # Left a draft: installed apps never see one, so nothing ships until
+      # you check it on GitHub and click Publish (docs/RELEASING.md).
+      - name: Add the files to the draft release
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          shopt -s nullglob
+          dir="release/$PLATFORM"
+          files=("$dir"/*.exe "$dir"/*.dmg "$dir"/*.zip "$dir"/*.AppImage "$dir"/*.blockmap "$dir"/latest*.yml)
+          if [ ${#files[@]} -eq 0 ]; then echo "::error::No installer in $dir"; exit 1; fi
+          ls -la "${files[@]}"
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "::notice::${PLATFORM} is on draft release ${GITHUB_REF_NAME}. Once every platform is there, check it on GitHub, then Publish."
+
+      # By hand nothing is released, so the installers are the run's
+      # artifacts, kept 3 days (90 filled the account's artifact storage).
+      - name: Keep the installer
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: periskopos-${{ matrix.platform }}
+          path: |
+            release/${{ matrix.platform }}/*.exe
+            release/${{ matrix.platform }}/*.dmg
+            release/${{ matrix.platform }}/*.zip
+            release/${{ matrix.platform }}/*.AppImage
+            release/${{ matrix.platform }}/*.blockmap
+            release/${{ matrix.platform }}/latest*.yml
+          if-no-files-found: error
+          retention-days: 3
