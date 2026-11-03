@@ -4,7 +4,7 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
-## Next release
+## 0.4.0 (2026-11-03)
 
 - **No recent data:** an app that looked up when last checked, but whose check
   is now two rounds late, says so instead of staying green, on the Apps page,
