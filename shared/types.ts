@@ -47,8 +47,10 @@ export type CheckResult = {
 
 // "none" = nothing to check. "attention" = the site is up but something
 // around it isn't (a failed deploy, failing CI). "prelaunch" = not live yet,
-// on purpose: nothing about it is wrong.
-export type AppState = CheckState | "attention" | "none" | "prelaunch";
+// on purpose: nothing about it is wrong. "stale" = it looked up when last
+// checked, but that was too long ago to say so now (the PC was off, checks
+// stopped): no recent data, not an all-clear.
+export type AppState = CheckState | "attention" | "none" | "prelaunch" | "stale";
 
 // outage: the app itself is down, counts against uptime.
 // deploy / ci / expiry / dependency: something to fix, but the app is
@@ -241,9 +243,13 @@ export type NotificationItem = {
   text: string; // what's wrong
   href: string; // where to look: "#/apps/star-map", "#/services"
   since?: string; // when it started
+  watching?: true; // about Periskopos's own checks or alerts, not an app
+  deliberate?: true; // switched off on purpose: listed, not counted in the bell
 };
+export type DeliveryChannel = "phone" | "desktop";
+export type DeliveryFailure = { channel: DeliveryChannel; message: string; at: string };
 export type RecoveredItem = { title: string; text: string; href: string; startedAt: string; endedAt: string };
-export type NotificationsView = { now: NotificationItem[]; earlier: RecoveredItem[] };
+export type NotificationsView = { now: NotificationItem[]; earlier: RecoveredItem[]; accountsRead?: boolean };
 
 export type Incident = {
   id: string;
@@ -274,9 +280,11 @@ export type DeployState = {
 export type AppStatus = {
   slug: string;
   state: AppState;
+  staleSince?: string; // when the check saying how it is last ran, if too long ago (state "stale" if that said up)
   checks: Record<string, CheckResult>; // latest, by connection id
   incident?: Incident; // the open one that matters most, if any
   uptime30d?: number; // %, over watched time; absent if never watched
+  uptimeWatchedMs?: number; // how much watched time that % rests on
   deploy?: DeployState; // when the app has both source control and a host
   metrics?: AppMetric[]; // the first few numbers the app reports about itself
 };

@@ -8,7 +8,7 @@ import { openDb } from "../server/db.ts";
 import { silentNotifier } from "../server/alerts/notify.ts";
 import type { Notice } from "../server/alerts/notify.ts";
 import { sendToPhone, withPhone } from "../server/alerts/phone.ts";
-import { DEFAULT_SETTINGS, updateSettings } from "../server/settings.ts";
+import { DEFAULT_SETTINGS, deliveryFailures, setDeliveryFailure, updateSettings } from "../server/settings.ts";
 import * as store from "../server/store.ts";
 import { Watcher } from "../server/watcher.ts";
 import { tempDir } from "./tmp.ts";
@@ -81,9 +81,10 @@ describe("sending", () => {
     const db = openDb(":memory:");
     const user = store.createUser(db, "Me");
     const shown: Notice[] = [];
-    const notifier = withPhone({ notify: async (n) => void shown.push(n) }, db);
+    const notifier = withPhone({ notify: async (n) => void shown.push(n) }, db, []);
     await notifier.notify({ ...notice, url: "http://localhost:4100/#/" });
     assert.equal(shown.length, 1);
+    assert.deepEqual(deliveryFailures(db, user.id), [], "off isn't a failure");
     assert.equal(sent.length, 0, "off: nothing leaves the PC");
 
     writeFileSync(keysFile, "PERISKOPOS_NTFY_TOPIC=periskopos-secret-topic-123\n");
@@ -95,11 +96,40 @@ describe("sending", () => {
     assert.equal(shown.length, 2, "shown on the desktop although the phone failed");
     assert.equal(sent.length, 1);
     assert.ok(!("url" in sent[0]!.body), "the local address isn't sent");
+    for (let i = 0; i < 1000 && deliveryFailures(db, user.id).length === 0; i++) await new Promise((r) => setImmediate(r));
+    assert.deepEqual(deliveryFailures(db, user.id).map((f) => [f.channel, f.message]), [["phone", "ntfy answered HTTP 500: {}"]]);
 
     // A phone service that never answers doesn't hold the desktop one up.
     globalThis.fetch = (() => new Promise<Response>(() => {})) as typeof fetch;
     await notifier.notify({ ...notice, url: "http://localhost:4100/#/" });
     assert.equal(shown.length, 3);
+  });
+});
+
+describe("an alert that couldn't reach me", () => {
+  test("is retried, and a send that works clears it", { timeout: 5_000 }, async () => {
+    const db = openDb(":memory:");
+    const user = store.createUser(db, "Me");
+    writeFileSync(keysFile, "PERISKOPOS_NTFY_TOPIC=periskopos-secret-topic-123\n");
+    updateSettings(db, user.id, { phoneChannel: "ntfy" });
+    setDeliveryFailure(db, user.id, "phone", { message: "old", at: "2026-11-01T00:00:00.000Z" });
+    const notifier = withPhone({ notify: async () => {} }, db, [0]);
+    sent.length = 0;
+    answer = { status: 500, body: {} };
+    await notifier.notify(notice);
+    for (let i = 0; i < 1000 && sent.length === 0; i++) await new Promise((r) => setImmediate(r));
+    answer = { status: 200, body: {} };
+    for (let i = 0; i < 2000 && (sent.length < 2 || deliveryFailures(db, user.id).length > 0); i++) await new Promise((r) => setTimeout(r, 1));
+    assert.equal(sent.length, 2, "the second try went");
+    assert.deepEqual(deliveryFailures(db, user.id), []);
+  });
+
+  test("on the desktop: said, and the notification still counts as failed", async () => {
+    const db = openDb(":memory:");
+    const user = store.createUser(db, "Me");
+    const notifier = withPhone({ notify: async () => { throw new Error("No toast"); } }, db, []);
+    await assert.rejects(notifier.notify(notice), /No toast/);
+    assert.deepEqual(deliveryFailures(db, user.id).map((f) => [f.channel, f.message]), [["desktop", "No toast"]]);
   });
 });
 

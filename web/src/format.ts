@@ -1,3 +1,4 @@
+import { duration } from "../../shared/format.ts";
 import type { AppState } from "../../shared/types.ts";
 
 // What a time we can't read shows as. Some times come from outside (an app
@@ -20,6 +21,11 @@ export function ago(iso: string, now = Date.now()): string {
 
 // 100 → "100%", 99.95 → "99.95%", 87.333 → "87.33%"
 export const formatPct = (pct: number) => `${Number(pct.toFixed(2))}%`;
+
+// A 30-day figure resting on much less than that says so: "100% of 3 h".
+const THIN_UPTIME_MS = 7 * 24 * 60 * 60_000;
+export const formatUptime = (pct: number, watchedMs?: number) =>
+  watchedMs !== undefined && watchedMs < THIN_UPTIME_MS ? `${formatPct(pct)} of ${duration(watchedMs)}` : formatPct(pct);
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
 const dayTimeFmt = new Intl.DateTimeFormat(undefined, {
@@ -60,6 +66,7 @@ export const STATE_LABEL: Record<ShownState, string> = {
   down: "Down",
   attention: "Needs attention",
   unknown: "Unknown",
+  stale: "No recent data",
   none: "No checks",
   prelaunch: "Not live yet",
   checking: "Checking…",
@@ -70,10 +77,11 @@ export const STATE_RANK: Record<ShownState, number> = {
   down: 0,
   attention: 1,
   unknown: 2,
-  checking: 3,
-  up: 4,
-  prelaunch: 5,
-  none: 6,
+  stale: 3,
+  checking: 4,
+  up: 5,
+  prelaunch: 6,
+  none: 7,
 };
 
 export const shortSha = (sha: string) => sha.slice(0, 7);

@@ -4,6 +4,39 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
+## Next release
+
+- **No recent data:** an app that looked up when last checked, but whose check
+  is now two rounds late, says so instead of staying green, on the Apps page,
+  the app's page, the tray and for AI assistants. "All systems normal" is only
+  said on recent checks. The Checked column follows the check that says whether
+  the app is up, not the newest check of any kind.
+- **When the checks themselves stop:** Needs attention says when background
+  checks are off or have stopped running, and checks that stop on their own
+  send a notification, and another when they're back.
+- **Checks that can't read:** a CI, deploy, payments or similar check that can't
+  read for over an hour shows in Needs attention, instead of leaving "All
+  normal" standing over a problem nobody can see.
+- **Alerts that don't arrive:** a phone alert is retried, and one that couldn't
+  be delivered (or a desktop notification the system refused) shows in the bell
+  until one gets through. Notifications switched off show there too, without
+  adding to the bell's count.
+- **What counts as up:** an answer from another host is said to be that, and a
+  403 or 429 counts as "can't tell", not down. If it goes on for over an hour,
+  Needs attention and a notification say so. This PC is only called offline when
+  neither GitHub nor Cloudflare answers.
+- **Honest numbers:** uptime runs from when the app was added and its site first
+  checked, and leaves out stretches when the checks couldn't tell. A figure
+  resting on under a week says so ("100% of 3 h"). An outage that spanned a
+  sleeping PC reports the time watched, and says part wasn't.
+- **The tray and the Apps page:** the tray is grey when an app's state isn't
+  known, and says so when the server stops answering; the Apps headline does the
+  same when it can't load. "Accounts and providers fine" only appears when they
+  were really read. A used-up free plan needs attention. Apps with no checks are
+  counted apart from "All normal".
+- **AI assistants** get the same facts: what's wrong with the watching itself,
+  how much time uptime rests on, and what couldn't be read.
+
 ## 0.3.8 (2026-11-02)
 
 - Windows and Linux: the ☰ menu button sits after Reload, before Minimize.

@@ -194,6 +194,11 @@
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--color-status-unknown);
 }
+/* No recent data: a ring with a dot, plainly different from "up" and "unknown" */
+.lamp--stale {
+  background: radial-gradient(circle, var(--color-status-unknown) 28%, transparent 32%);
+  box-shadow: inset 0 0 0 1.5px var(--color-status-unknown);
+}
 /* Not live yet: a dashed ring, plainly different from "unknown" (solid ring) */
 .lamp--prelaunch {
   background: transparent;

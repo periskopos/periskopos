@@ -72,17 +72,27 @@ export const site: Integration = {
       const ok = typeof expect === "number" ? res.status === expect : res.ok;
       if (!ok) {
         await res.body?.cancel();
+        // The site answered, and refused this check: a firewall or a rate limit
+        // says nothing about whether it's up for its visitors.
+        if (res.status === 403 || res.status === 429) {
+          return { state: "unknown", at, ms, httpStatus: res.status, detail: `Answered HTTP ${res.status}: it may be blocking this check, so it can't tell whether the site is up` };
+        }
         return { state: "down", at, ms, httpStatus: res.status, detail: `Answered HTTP ${res.status}` };
       }
       const wrong = await contentProblem(conn, res);
       if (wrong) return { state: "down", at, ms, httpStatus: res.status, detail: wrong };
       const slow = site.slowness!(conn);
+      const elsewhere = redirectedElsewhere(conn, res);
+      const notes = [
+        slow && ms > slow.overMs ? `Slow: ${ms} ms, over ${slow.overMs} ms` : undefined,
+        elsewhere ? `Answered from ${elsewhere}, so this only shows that host is up. Change the address, or set text the page must contain` : undefined,
+      ].filter(Boolean);
       return {
         state: "up",
         at,
         ms,
         httpStatus: res.status,
-        ...(slow && ms > slow.overMs ? { summary: `Slow: ${ms} ms, over ${slow.overMs} ms` } : {}),
+        ...(notes.length ? { summary: notes.join(" · ") } : {}),
       };
     } catch (err) {
       return { state: "down", at, detail: describe(err) };
@@ -95,6 +105,22 @@ function whole(value: unknown, field: string, [min, max]: readonly [number, numb
   const n = typeof value === "string" ? Number(value) : value;
   if (typeof n !== "number" || !Number.isInteger(n) || n < min || n > max) throw badRequest(`${field} must be a whole number from ${min} to ${max}`);
   return n;
+}
+
+// The other host a check ended up on, when it did: a login provider, a parking
+// page, a Wi-Fi sign-in page. That answer is a fact about that host, so it's
+// said; it isn't called down, as plenty of sites redirect on purpose. Not when
+// the page's content is checked (it was the right page), and www, or another
+// name under the same address, is the same site.
+function redirectedElsewhere(conn: Connection, res: Response): string | undefined {
+  if (typeof conn.settings?.expectText === "string" || typeof conn.settings?.expectJson === "string") return undefined;
+  try {
+    const bare = (url: string) => new URL(url).hostname.replace(/^www\./, "");
+    const [asked, answered] = [bare(conn.resource), bare(res.url)];
+    return asked === answered || answered.endsWith(`.${asked}`) || asked.endsWith(`.${answered}`) ? undefined : answered;
+  } catch {
+    return undefined; // no final address to compare (a test's stand-in response)
+  }
 }
 
 // What's wrong with a page that answered fine: it lacks the text it should

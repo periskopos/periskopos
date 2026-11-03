@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { CheckResult, CheckState, Connection } from "../shared/types.ts";
 import { openDb } from "../server/db.ts";
-import { overallState } from "../server/status.ts";
+import { overallState, staleAfterMs, staleSince } from "../server/status.ts";
 import * as store from "../server/store.ts";
 
 // What an app's checks add up to, and adding the same connection twice.
@@ -29,6 +29,34 @@ describe("an app's state", () => {
   test("down and attention still win", () => {
     assert.equal(overallState([check("site", "down"), check("domain", "unknown")]), "down");
     assert.equal(overallState([check("site", "up"), check("ssl", "down")]), "attention");
+  });
+});
+
+describe("no recent data", () => {
+  const NOW = Date.parse(AT);
+  const agoMin = (type: string, min: number) => {
+    const c = check(type, "up");
+    return { conn: c.conn, result: { ...c.result, at: new Date(NOW - min * 60_000).toISOString() } };
+  };
+
+  test("a site check two rounds late is out of date; one round late isn't", () => {
+    assert.equal(staleAfterMs(check("site", "up").conn, 5), 12 * 60_000);
+    assert.equal(staleSince([agoMin("site", 11)], 5, NOW), undefined);
+    assert.equal(staleSince([agoMin("site", 13)], 5, NOW), new Date(NOW - 13 * 60_000).toISOString());
+  });
+
+  test("a daily check is judged by its own day, and doesn't decide for a fresh site", () => {
+    assert.equal(staleSince([agoMin("site", 1), agoMin("ssl", 3 * 24 * 60)], 5, NOW), undefined);
+    assert.equal(staleSince([agoMin("ssl", 24 * 60)], 5, NOW), undefined);
+    assert.ok(staleSince([agoMin("ssl", 3 * 24 * 60)], 5, NOW));
+  });
+
+  test("a fresh daily check doesn't vouch for a site that's out of date", () => {
+    assert.ok(staleSince([agoMin("site", 60), agoMin("ssl", 1)], 5, NOW));
+  });
+
+  test("with no check saying whether the app is up, all of them must be out of date", () => {
+    assert.equal(staleSince([agoMin("ssl", 3 * 24 * 60), agoMin("domain", 1)], 5, NOW), undefined);
   });
 });
 

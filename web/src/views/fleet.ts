@@ -3,12 +3,11 @@ import { duration } from "../../../shared/format.ts";
 import type { App, AppMetric, AppStatus, NotificationItem, NotificationsView, User } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { h, mount } from "../dom.ts";
-import { STATE_LABEL, STATE_RANK, formatPct, hostOf, shortSha } from "../format.ts";
+import { STATE_LABEL, STATE_RANK, formatPct, formatUptime, hostOf, shortSha } from "../format.ts";
 import type { ShownState } from "../format.ts";
 import { attentionCount, attentionSection } from "./attention.ts";
-import { loadProviders } from "./providers.ts";
 import type { ProviderStatus } from "../../../shared/types.ts";
-import { summarize } from "../../../shared/fleet.ts";
+import { providersRead, summarize } from "../../../shared/fleet.ts";
 import { PUSH, appIcon, busyButton, errorBox, lamp, refreshNotifications, shell, status, timeAgo } from "../ui.ts";
 
 const REFRESH_MS = 60_000;
@@ -33,6 +32,8 @@ export function fleetView(root: Element, user: User): () => void {
   let lastLoaded: string | undefined;
   let providers: ProviderStatus[] = [];
   let attention: NotificationItem[] | undefined; // until it's read, the header claims nothing
+  let accountsRead = false;
+  let providersOk = false;
 
   const headline = h("div", { class: "summary" });
   const sub = h("p", { class: "meta" });
@@ -80,7 +81,12 @@ export function fleetView(root: Element, user: User): () => void {
 
   function draw() {
     mount(strip, attentionSection(attention ?? [], providers));
-    if (error) return mount(board, errorBox(error));
+    if (error) {
+      // What was loaded last is old news: the header doesn't go on saying it.
+      mount(headline, lamp("unknown", { large: true }), h("h1", null, "Can't read your apps' status"));
+      mount(sub, lastLoaded && ["Last updated ", timeAgo(lastLoaded)]);
+      return mount(board, errorBox(error));
+    }
     if (!apps) {
       mount(headline, h("h1", null, "Apps"));
       return mount(board, h("p", { class: "meta" }, "Loading…"));
@@ -112,7 +118,8 @@ export function fleetView(root: Element, user: User): () => void {
     mount(
       sub,
       `${apps.length} app${apps.length === 1 ? "" : "s"}`,
-      attention && attentionCount(attention, providers) === 0 && " · accounts and providers fine",
+      // Only when they were really read: not a failed read, or a key never tested.
+      attention && attentionCount(attention, providers) === 0 && accountsRead && providersOk && " · accounts and providers fine",
       lastLoaded && [" · updated ", timeAgo(lastLoaded)],
     );
 
@@ -168,13 +175,17 @@ export function fleetView(root: Element, user: User): () => void {
       lastLoaded = new Date().toISOString();
       // The checks just recorded: the bell follows at once.
       void refreshNotifications(true);
-      providers = await loadProviders();
+      const read = await api<{ providers: ProviderStatus[] }>("GET", "/providers").then(
+        (r) => r.providers,
+        () => undefined, // a status page being unreachable must never break a screen
+      );
+      providers = read ?? [];
+      providersOk = read !== undefined && providersRead(read);
       // The bell's list, for the strip above the board. Failing to read it
       // keeps what was there: it must never break the page.
-      attention = await api<NotificationsView>("GET", "/notifications").then(
-        (v) => v.now,
-        () => attention,
-      );
+      const view = await api<NotificationsView>("GET", "/notifications").catch(() => undefined);
+      if (view) attention = view.now;
+      accountsRead = view?.accountsRead === true;
     } catch (err) {
       error = err;
     }
@@ -202,7 +213,9 @@ function factsOf(app: App, s: AppStatus | undefined) {
   const state: ShownState = s?.state ?? "checking";
   const site = mainSite(app);
   const check = site && s?.checks[site.id];
-  const latest = s ? Object.values(s.checks).sort((a, b) => b.at.localeCompare(a.at))[0] : undefined;
+  // The check that says whether the app is up, when there is one: a certificate
+  // checked just now says nothing about a site last checked hours ago.
+  const latest = check ?? (s ? Object.values(s.checks).sort((a, b) => b.at.localeCompare(a.at))[0] : undefined);
 
   // A problem replaces the URL with what's wrong.
   const incident = s?.incident;
@@ -210,19 +223,25 @@ function factsOf(app: App, s: AppStatus | undefined) {
     ? h(
         "span",
         { class: `reason reason--${incident.kind === "outage" ? "down" : "attention"}` },
-        incident.kind === "outage" ? `Down ${duration(Date.now() - Date.parse(incident.startedAt))} · ${incident.reason}` : incident.reason,
+        // Not "down for 5 days" when nothing has looked for hours: only what's known.
+        incident.kind !== "outage" ? incident.reason : s?.staleSince ? [timeAgo(s.staleSince, "Last seen down "), ` · ${incident.reason}`] : `Down ${duration(Date.now() - Date.parse(incident.startedAt))} · ${incident.reason}`,
       )
     : check && check.state === "down"
       ? h("span", { class: "reason reason--down" }, check.detail ?? "Not responding")
-      : h("span", { class: "app-url" }, hostOf(app.url));
+      : check?.state === "unknown" && check.detail
+        ? h("span", { class: "meta" }, check.detail)
+        : s?.staleSince
+        ? h("span", { class: "meta" }, timeAgo(s.staleSince, "Last checked "))
+        : h("span", { class: "app-url" }, hostOf(app.url));
 
   const push = s?.deploy;
   const commit = push && (push.state === "live" ? push.live : push.latest);
   const pushed = push
     ? h("span", { class: "status" }, lamp(PUSH[push.state].lamp), PUSH[push.state].text, commit && h("span", { class: "hash" }, shortSha(commit.sha)))
     : undefined;
-  const response = check?.ms !== undefined && check.state === "up" ? `${check.ms} ms` : undefined;
-  const uptime = s?.uptime30d !== undefined ? formatPct(s.uptime30d) : undefined;
+  // No figure from hours ago beside a state that says there's no recent data.
+  const response = check?.ms !== undefined && check.state === "up" && state !== "stale" ? `${check.ms} ms` : undefined;
+  const uptime = s?.uptime30d !== undefined ? formatUptime(s.uptime30d, s.uptimeWatchedMs) : undefined;
   return { state, check, latest, reason, pushed, response, uptime };
 }
 

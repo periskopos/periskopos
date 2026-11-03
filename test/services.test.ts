@@ -304,6 +304,7 @@ describe("deploy and CI incidents", () => {
 
     // Deploy incidents never count against uptime: an hour of one, in two
     // hours watched, leaves it at 100%.
+    db.prepare("UPDATE apps SET created_at = ? WHERE id = ?").run(new Date(Date.now() - 3 * H).toISOString(), app.id);
     const id = history.startPeriod(db, Date.now() - 2 * H);
     history.heartbeat(db, id, Date.now());
     const uptime = () => history.uptime(db, app.id, Date.now() - 2 * H, Date.now()).uptimePct!;

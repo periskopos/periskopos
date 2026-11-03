@@ -106,6 +106,20 @@ export function latestChecks(db: DatabaseSync, appIds: string[]): Map<string, Ch
   return new Map(rows.map((r) => [r.connection_id, toResult(r)]));
 }
 
+// Connections whose latest check couldn't say, and since when none has: from
+// the first "unknown" after the last check that said up or down.
+export function unknownSince(db: DatabaseSync, appIds: string[]): { connectionId: string; since: string; detail?: string; httpStatus?: number }[] {
+  const first = db.prepare(
+    `SELECT MIN(at) AS since FROM checks
+     WHERE connection_id = ? AND id > COALESCE((SELECT MAX(id) FROM checks WHERE connection_id = ? AND state != 'unknown'), 0)`,
+  );
+  return [...latestChecks(db, appIds)].flatMap(([connectionId, latest]) => {
+    if (latest.state !== "unknown") return [];
+    const { since } = first.get(connectionId, connectionId) as { since: string };
+    return [{ connectionId, since, ...(latest.detail ? { detail: latest.detail } : {}), ...(latest.httpStatus !== undefined ? { httpStatus: latest.httpStatus } : {}) }];
+  });
+}
+
 // ── Incidents ───────────────────────────────────────────────────────────
 
 type IncidentRow = {
@@ -228,9 +242,35 @@ function measure(watched: Interval[], incidents: Incident[], from: number, to: n
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export function uptime(db: DatabaseSync, appId: string, from: number, to: number, now = Date.now()) {
-  return measure(watchedIntervals(db, from, to, now), incidentsBetween(db, appId, from, to), from, to, now);
+// The watched time that can say anything about this app: from when it was
+// added and its site first checked (an app that's only just gone live has no
+// month of uptime behind it), and not while its site's checks couldn't tell
+// (a firewall refusing them is neither up nor down).
+function watchedForApp(db: DatabaseSync, appId: string, watched: Interval[], from: number, to: number, now: number): Interval[] {
+  const { created_at: created, first } = db
+    .prepare(
+      `SELECT a.created_at, (SELECT MIN(c.at) FROM checks c JOIN connections k ON k.id = c.connection_id WHERE c.app_id = a.id AND k.type = 'site') AS first
+       FROM apps a WHERE a.id = ?`,
+    )
+    .get(appId) as { created_at: string; first: string | null };
+  const start = Math.max(from, Date.parse(created), first ? Date.parse(first) : from);
+  const unknown = db
+    .prepare(
+      `SELECT c.at, (SELECT MIN(n.at) FROM checks n WHERE n.connection_id = c.connection_id AND n.at > c.at AND n.state != 'unknown') AS until
+       FROM checks c JOIN connections k ON k.id = c.connection_id
+       WHERE c.app_id = ? AND k.type = 'site' AND c.state = 'unknown' AND c.at < ?`,
+    )
+    .all(appId, iso(to)) as { at: string; until: string | null }[];
+  const couldTell = complement(unknown.map(({ at, until }): Interval => [Date.parse(at), until ? Date.parse(until) : now]), start, to);
+  return intersect(clip(watched, start, to), couldTell);
 }
+
+export function uptime(db: DatabaseSync, appId: string, from: number, to: number, now = Date.now()) {
+  return measure(watchedForApp(db, appId, watchedIntervals(db, from, to, now), from, to, now), incidentsBetween(db, appId, from, to), from, to, now);
+}
+
+// How much of a stretch the watcher was running for.
+export const watchedMsBetween = (db: DatabaseSync, from: number, to: number, now = Date.now()) => total(watchedIntervals(db, from, to, now));
 
 export function localDayStart(ms: number): number {
   const d = new Date(ms);
@@ -277,7 +317,8 @@ function dayStat(db: DatabaseSync, appId: string, start: number, now: number, wa
 // The app page's history: the last `days` days, in detail.
 export function appHistory(db: DatabaseSync, appId: string, now = Date.now(), days = 30): AppHistory {
   const firstDay = localDaysBefore(now, days - 1);
-  const watched = watchedIntervals(db, firstDay, now, now);
+  const watcherRan = watchedIntervals(db, firstDay, now, now);
+  const watched = watchedForApp(db, appId, watcherRan, firstDay, now, now);
   const incidents = incidentsBetween(db, appId, firstDay, now);
   const { watchedMs, uptimePct } = measure(watched, incidents, firstDay, now, now);
 
@@ -291,7 +332,7 @@ export function appHistory(db: DatabaseSync, appId: string, now = Date.now(), da
     | { created_at: string }
     | undefined;
   const gapsFrom = Math.max(firstDay, created ? Date.parse(created.created_at) : firstDay);
-  const gaps: Gap[] = complement(watched, gapsFrom, now)
+  const gaps: Gap[] = complement(watcherRan, gapsFrom, now)
     .filter(([a, b]) => b - a >= GAP_MS)
     .reverse()
     .map(([a, b]) => ({ from: iso(a), to: iso(b) }));

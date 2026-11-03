@@ -48,7 +48,7 @@ import { readChromeColors, writeChromeColors } from "./shell-chrome.ts";
 import { createSplashWindow } from "./splash.ts";
 import type { SplashWindow } from "./splash.ts";
 import { destroyTray, hasTray, installTray, refreshTrayMenu, setTrayGlance, setTrayTooltip } from "./tray.ts";
-import { buildGlance, trayVariant } from "./tray-glance.ts";
+import { FAILED_POLLS_BEFORE_SAYING, UNREACHABLE_TEXT, buildGlance, trayVariant, unreachableGlance } from "./tray-glance.ts";
 import type { GlanceApp } from "./tray-glance.ts";
 import { trayUpdateItem } from "./update-plan.ts";
 import type { UpdateState } from "./update-plan.ts";
@@ -202,7 +202,31 @@ function hintTray(): void {
 
 function notify(notice: DesktopNotice): void {
   const route = routeFromNoticeUrl(notice.url, PORT);
-  showNotification(noticeForRun(notice, isPackaged), iconFor("notification", isPackaged, resources()), () => showWindow(route), logLine);
+  showNotification(
+    noticeForRun(notice, isPackaged),
+    iconFor("notification", isPackaged, resources()),
+    () => showWindow(route),
+    (message) => {
+      logLine(message);
+      void reportDelivery(message);
+    },
+    () => void reportDelivery(),
+  );
+}
+
+// Tells the server whether the OS took a notification, so the bell can say
+// when one couldn't reach me.
+async function reportDelivery(message?: string): Promise<void> {
+  try {
+    await fetch(`${ORIGIN}/api/notifications/delivery`, {
+      method: "POST",
+      headers: { "x-periskopos-token": sessionKey, "content-type": "application/json" },
+      body: JSON.stringify(message ? { message } : {}),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    // the server isn't answering: it's in the log, and there's more to say than this
+  }
 }
 
 // ── Messages from the page ──────────────────────────────────────────────
@@ -329,17 +353,23 @@ function writeLoginItemFile(dataDir: string, on: boolean): void {
 // in the same refresh; if only they fail, the last names seen are kept (an
 // app missing from them shows by its slug).
 function startActivityPolling(): void {
-  let saidWhy = false;
+  let failed = 0;
   let apps: GlanceApp[] = [];
   const refresh = async () => {
     const [statuses, listed] = await Promise.all([fetchStatuses(ORIGIN, sessionKey), fetchApps(ORIGIN, sessionKey)]);
     if (listed) apps = listed;
     if (!statuses) {
-      if (!saidWhy) logLine(`tray tooltip: ${ORIGIN} didn't give its status, so the tooltip keeps what it said`);
-      saidWhy = true;
-      return; // keep what it said
+      if (failed === 0) logLine(`tray tooltip: ${ORIGIN} didn't give its status`);
+      failed += 1;
+      // A hiccup keeps what it said; more than that, and what it said is old news.
+      if (failed >= FAILED_POLLS_BEFORE_SAYING) {
+        setTrayTooltip(`Periskopos: ${UNREACHABLE_TEXT}`);
+        setTrayGlance(unreachableGlance(), "unknown");
+        app.dock?.setBadge("");
+      }
+      return;
     }
-    saidWhy = false;
+    failed = 0;
     setTrayTooltip(tooltipFor(statuses));
     setTrayGlance(buildGlance(apps, statuses), trayVariant(statuses));
     app.dock?.setBadge(badgeText(attentionCount(statuses)));

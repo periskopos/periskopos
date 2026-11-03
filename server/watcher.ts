@@ -4,6 +4,7 @@ import { KEY_WARN_DAYS, daysLeft, duration } from "../shared/format.ts";
 import type { App, CheckResult, Connection, Incident, PlanUsage, Service, ServiceType, UsageMeter } from "../shared/types.ts";
 import { AUDIT_EVERY_MS, auditApp, lastAuditAt } from "./audits/audit.ts";
 import type { Checks } from "./audits/audit.ts";
+import { UNREADABLE_AFTER_MS } from "./alerts/notifications.ts";
 import * as history from "./history.ts";
 import { SERVICE_TYPES, integrations } from "./integrations/index.ts";
 import { testKey } from "./keys/keys.ts";
@@ -29,6 +30,9 @@ export const TICK_MS = 30_000;
 // After a failure, and while down, check again this soon instead of
 // waiting the app's whole interval: confirms an outage, or a recovery, fast.
 export const CONFIRM_MS = 60_000;
+// This many ticks in a row (5 minutes) not getting through, stuck or failing:
+// the checks have stopped, and that's news in itself.
+export const STOPPED_AFTER_TICKS = 10;
 const MAINTENANCE_MS = 60 * 60_000;
 // Checks at once against one provider, or one site's host.
 export const PER_PROVIDER = 4;
@@ -118,9 +122,14 @@ export function settleLiveChecks(db: DatabaseSync, app: App, at = new Date().toI
   }
 }
 
-export async function defaultIsOnline(): Promise<boolean> {
+// Offline only if neither answers: one big site down or blocked here mustn't
+// turn a real outage into "this PC is offline". Only a HEAD, with nothing about
+// me or my apps in it. The privacy page names these: change them together.
+const ONLINE_PROBES = ["https://github.com", "https://www.cloudflare.com"];
+
+export async function defaultIsOnline(probes: readonly string[] = ONLINE_PROBES): Promise<boolean> {
   try {
-    await fetch("https://github.com", { method: "HEAD", signal: AbortSignal.timeout(5000) });
+    await Promise.any(probes.map((url) => fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5000) })));
     return true;
   } catch {
     return false;
@@ -142,6 +151,9 @@ export class Watcher {
   #lastBeat = 0;
   #lastMaintenance = 0;
   #offline = false;
+  #missedTicks = 0;
+  #lastGoodTick: number | undefined;
+  #stoppedSince: string | undefined;
   // connection id → when it was last checked, and which resource that was:
   // editing an app's URL keeps the connection id but points it at a new
   // host, and the new host hasn't been checked at all.
@@ -184,10 +196,19 @@ export class Watcher {
     this.#timer = undefined;
   }
 
+  // Since when ticks have stopped getting through, while they should be.
+  get stoppedSince(): string | undefined {
+    return this.#stoppedSince;
+  }
+
   async tick(now = Date.now()) {
-    if (this.#busy) return;
+    if (this.#busy) {
+      this.#missedTick(now);
+      return;
+    }
     this.#busy = true;
     let slow: Promise<void> | undefined;
+    let failed = false;
     try {
       const user = store.getLocalUser(this.#db);
       // Switched off: no heartbeat, so this time shows as not watched.
@@ -222,10 +243,40 @@ export class Watcher {
       await this.refreshProviders(user.id, false, now);
     } catch (err) {
       console.error("Watcher tick failed:", err);
+      failed = true;
     } finally {
       this.#busy = false;
     }
+    if (failed) this.#missedTick(now);
+    else this.#tickWentThrough(now);
     await slow;
+  }
+
+  // Counted in ticks, not time: a PC that slept missed no ticks, and only
+  // ticks that ran and couldn't get through mean the checks have stopped.
+  #missedTick(now: number) {
+    this.#missedTicks += 1;
+    if (this.#missedTicks !== STOPPED_AFTER_TICKS) return;
+    this.#stoppedSince = new Date(this.#lastGoodTick ?? now).toISOString();
+    console.error(`Watcher: ${STOPPED_AFTER_TICKS} ticks in a row didn't get through`);
+    void this.#announceChecks({ title: "Periskopos has stopped checking your apps", body: "What it shows may be out of date. Restarting Periskopos may clear it." });
+  }
+
+  #tickWentThrough(now: number) {
+    this.#missedTicks = 0;
+    this.#lastGoodTick = now;
+    if (!this.#stoppedSince) return;
+    this.#stoppedSince = undefined;
+    void this.#announceChecks({ title: "Periskopos is checking your apps again", body: "Checks are running again." });
+  }
+
+  async #announceChecks(notice: { title: string; body: string }) {
+    try {
+      const user = store.getLocalUser(this.#db);
+      if (user) await this.#announce(user.id, notice);
+    } catch (err) {
+      console.error("Couldn't say the checks stopped:", err);
+    }
   }
 
   async #slowWork(userId: string, now: number) {
@@ -338,10 +389,25 @@ export class Watcher {
     // nothing checked before this belongs to it.
     const before = this.#lastChecked.get(conn.id);
     if (before && before.resource !== conn.resource) this.#newResourceAt.set(conn.id, result.at);
+    const refused = result.state === "unknown" && integration.incidentKind === "outage" && result.httpStatus !== undefined;
+    const previous = refused ? history.latestCheck(this.#db, conn.id) : undefined;
     history.recordCheck(this.#db, app.id, conn.id, result);
     this.#lastChecked.set(conn.id, { resource: conn.resource, at: Date.parse(result.at) });
     if (result.state !== "unknown") await this.#track(app, conn, result);
+    else if (refused) await this.#sayIfStillRefused(app, conn, result, previous?.at);
     return result;
+  }
+
+  // A site refusing the check opens no incident: it may be up for its visitors.
+  // But it may be refusing them too, so once it's gone on for a while I'm told,
+  // once: judged from what's recorded, so a restart doesn't say it again.
+  async #sayIfStillRefused(app: App, conn: Connection, result: CheckResult, previousAt: string | undefined) {
+    const since = history.unknownSince(this.#db, [app.id]).find((u) => u.connectionId === conn.id)?.since;
+    if (!since || !previousAt) return;
+    const longEnough = (at: string) => Date.parse(at) - Date.parse(since) >= UNREADABLE_AFTER_MS;
+    if (longEnough(previousAt) || !longEnough(result.at)) return;
+    const name = isExtraSite(app, conn) ? `${app.name} · ${connectionLabel(conn)}` : app.name;
+    await this.#notify(app, { title: `${name} is refusing Periskopos's checks`, body: `It has answered HTTP ${result.httpStatus} for over an hour. A firewall or rate limit may be blocking only the check, or visitors too: Periskopos can't tell.` });
   }
 
   async #track(app: App, conn: Connection, result: CheckResult) {
@@ -363,7 +429,13 @@ export class Watcher {
     if (result.state === "up") {
       if (open) {
         history.closeIncident(this.#db, open.id, result.at);
-        await this.#notify(app, words("up", open.reason, Date.parse(result.at) - Date.parse(open.startedAt)));
+        // A short failure, then a PC asleep for three days, wasn't three days
+        // down: what's said is the time actually watched, and that it's partial.
+        const [from, to] = [Date.parse(open.startedAt), Date.parse(result.at)];
+        const watched = history.watchedMsBetween(this.#db, from, to);
+        const partial = watched > 0 && to - from - watched >= history.GAP_MS;
+        const notice = words("up", open.reason, partial ? watched : to - from);
+        await this.#notify(app, partial ? { ...notice, body: `${notice.body} Periskopos wasn't watching for another ${duration(to - from - watched)}, so it could have been longer or shorter.` } : notice);
       }
       await this.#trackSlow(app, conn, result, slow, name);
       return;

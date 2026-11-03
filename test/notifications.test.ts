@@ -8,7 +8,8 @@ import type { App, Incident, NotificationsView, ServiceView } from "../shared/ty
 import { createApp } from "../server/app.ts";
 import { openDb } from "../server/db.ts";
 import * as history from "../server/history.ts";
-import { keyProblem, notificationsView } from "../server/alerts/notifications.ts";
+import { keyProblem, notificationsView, planProblem } from "../server/alerts/notifications.ts";
+import type { ChecksHealth } from "../server/alerts/notifications.ts";
 import * as store from "../server/store.ts";
 import { buildNotificationsButton, summaryOf } from "../web/src/notificationsButton.ts";
 import { tempDir } from "./tmp.ts";
@@ -34,6 +35,74 @@ describe("what needs looking at", () => {
   const exo = app("a1", "Star-Map");
   const endo = app("a2", "Moon-Base");
   const shop = app("a3", "Shop");
+
+  test("the checks themselves not running is said apart from the apps", () => {
+    const off = notificationsView([exo], new Map(), [], [], NOW, { off: true });
+    assert.deepEqual(off.now.map((n) => [n.state, n.title, n.href]), [["attention", "Periskopos", "#/settings"]]);
+    assert.match(off.now[0].text, /Background checks are off/);
+    const stopped = notificationsView([exo], new Map(), [], [], NOW, { stoppedSince: at(10) });
+    assert.match(stopped.now[0].text, /Checks have stopped/);
+    assert.equal(stopped.now[0].since, at(10));
+    assert.deepEqual(notificationsView([exo], new Map(), [], [], NOW, {}).now, []);
+    assert.deepEqual(notificationsView([], new Map(), [], [], NOW, { off: true }).now, [], "nothing live: nothing to be out of date");
+  });
+
+  test("a used-up free plan is said, unless the plan is paid", () => {
+    const meter = { label: "Workers requests today", used: 100_000, limit: 100_000, resetsAt: at(-60) };
+    const used = account({ planUsage: { at: at(5), meters: [meter] } });
+    assert.match(planProblem(used)!, /Workers requests today: the free plan's limit is used up/);
+    assert.equal(planProblem({ ...used, paidPlan: true }), undefined);
+    assert.equal(planProblem(account({ planUsage: { at: at(5), meters: [{ ...meter, used: 5 }] } })), undefined);
+  });
+
+  test("accounts count as read only when each key's last test passed lately", () => {
+    const read = (s: ServiceView) => notificationsView([], new Map(), [], [s], NOW).accountsRead;
+    assert.equal(read(account({ lastTest: { ok: true, message: "ok", at: at(60) } })), true);
+    assert.equal(read(account({})), false, "never tested");
+    assert.equal(read(account({ lastTest: { ok: false, message: "No answer", at: at(60) } })), false);
+    assert.equal(read(account({ lastTest: { ok: true, message: "ok", at: at(5 * 24 * 60) } })), false, "tested days ago");
+  });
+
+  test("notifications switched off are said: silence isn't health", () => {
+    const view = notificationsView([exo], new Map(), [], [], NOW, { silent: true });
+    assert.deepEqual(view.now.map((n) => [n.title, n.href]), [["Periskopos", "#/settings/notifications"]]);
+    assert.match(view.now[0]!.text, /Notifications are off/);
+    assert.deepEqual(notificationsView([], new Map(), [], [], NOW, { silent: true }).now, [], "nothing live: nothing to miss");
+  });
+
+  test("an alert that couldn't reach me is said, with why", () => {
+    const view = notificationsView([], new Map(), [], [], NOW, { delivery: [{ channel: "phone", message: "Telegram answered HTTP 401", at: at(5) }] });
+    assert.deepEqual(view.now.map((n) => [n.title, n.text, n.href]), [["Periskopos", "An alert couldn't reach your phone: Telegram answered HTTP 401", "#/settings/notifications"]]);
+  });
+
+  test("a CI check that can't read for a while is said; the site and expiry dates aren't", () => {
+    const conn = (id: string, type: string) => ({ id, appId: exo.id, type, resource: "x" });
+    const withChecks = { ...exo, connections: [conn("ci", "github"), conn("site", "site"), conn("dom", "domain")] };
+    const unknown = (connectionId: string, minAgo: number) => ({ connectionId, since: at(minAgo), detail: "Not found" });
+    const view = (minAgo: number) => notificationsView([withChecks], new Map(), [], [], NOW, { unreadable: [unknown("ci", minAgo), unknown("site", 600), unknown("dom", 600)] }).now;
+    assert.deepEqual(view(30), [], "a hiccup isn't news");
+    const [item, ...rest] = view(120);
+    assert.equal(rest.length, 0);
+    assert.match(item!.text, /GitHub can't be read, so a problem there wouldn't show: Not found/);
+    assert.equal(item!.since, at(120));
+  });
+
+  test("a site refusing the check for a while is said; a parked app's or an offline PC's isn't", () => {
+    const withSite = { ...exo, connections: [{ id: "site", appId: exo.id, type: "site", resource: "x" }] };
+    const refused = (minAgo: number) => ({ unreadable: [{ connectionId: "site", since: at(minAgo), detail: "Answered HTTP 403: it may be blocking this check", httpStatus: 403 }] });
+    assert.deepEqual(notificationsView([withSite], new Map(), [], [], NOW, refused(30)).now, [], "a hiccup isn't news");
+    const [item] = notificationsView([withSite], new Map(), [], [], NOW, refused(120)).now;
+    assert.deepEqual([item!.title, item!.text, item!.since, item!.watching], [exo.name, "Answered HTTP 403: it may be blocking this check", at(120), undefined]);
+    assert.deepEqual(notificationsView([{ ...withSite, live: false }], new Map(), [], [], NOW, refused(120)).now, []);
+  });
+
+  test("something switched off on purpose is marked; a fault in the watching isn't", () => {
+    const deliberate = (checks: ChecksHealth) => notificationsView([exo], new Map(), [], [], NOW, checks).now.map((n) => n.deliberate);
+    assert.deepEqual(deliberate({ off: true }), [true]);
+    assert.deepEqual(deliberate({ silent: true }), [true]);
+    assert.deepEqual(deliberate({ stoppedSince: at(5) }), [undefined]);
+    assert.deepEqual(deliberate({ delivery: [{ channel: "phone", message: "x", at: at(5) }] }), [undefined]);
+  });
 
   test("down first, then the longest-standing; each opens its app", () => {
     const open = new Map([
@@ -70,6 +139,7 @@ describe("what needs looking at", () => {
     const n = (state: "down" | "attention") => ({ state, title: "x", text: "y", href: "#/" });
     assert.equal(summaryOf([n("attention")]), "1 needs attention");
     assert.equal(summaryOf([n("down"), n("attention"), n("attention")]), "1 down · 2 need attention");
+    assert.equal(summaryOf([{ ...n("attention"), deliberate: true }]), "1 switched off");
   });
 });
 
@@ -97,6 +167,21 @@ describe("GET /api/notifications", () => {
     assert.deepEqual(view.earlier.map((e) => e.text), ["HTTP 502"], "a week ago isn't 'the last day'");
     assert.equal(view.now[0]!.since, open.startedAt);
   });
+
+  test("how long a check has been unable to say runs from the last time it could", () => {
+    const db = openDb(":memory:");
+    const user = store.createUser(db, "Me");
+    const exo = store.createApp(db, user.id, { name: "Star-Map", url: "https://example.org/" });
+    const site = exo.connections.find((c) => c.type === "site")!;
+    const record = (state: "up" | "unknown", minAgo: number) => history.recordCheck(db, exo.id, site.id, { state, at: at(minAgo) });
+    record("unknown", 300);
+    record("up", 200);
+    record("unknown", 100);
+    record("unknown", 50);
+    assert.deepEqual(history.unknownSince(db, [exo.id]).map((u) => u.since), [at(100)]);
+    record("up", 10);
+    assert.deepEqual(history.unknownSince(db, [exo.id]), []);
+  });
 });
 
 describe("the bell", () => {
@@ -117,6 +202,15 @@ describe("the bell", () => {
     bell.show({ now: [{ state: "down", title: "Shop", text: "No answer", href: "#/apps/shop" }, { state: "attention", title: "Moon-Base", text: "CI failing on main", href: "#/apps/moon-base" }], earlier: [] });
     assert.equal(badge.textContent, "2");
     assert.ok(badge.classList.contains("notify-badge--down"), "anything down: red");
+  });
+
+  test("something switched off on purpose is listed, with no count", () => {
+    const bell = buildNotificationsButton();
+    document.body.replaceChildren(bell.root);
+    bell.show({ now: [{ state: "attention", title: "Periskopos", watching: true, deliberate: true, text: "Notifications are off", href: "#/settings/notifications" }], earlier: [] });
+    assert.equal(bell.root.querySelector<HTMLElement>(".notify-badge")!.hidden, true);
+    assert.equal(bell.root.querySelector(".notify-btn")!.getAttribute("aria-label"), "Notifications: 1 switched off");
+    assert.equal(bell.root.querySelectorAll(".notify-item").length, 1);
   });
 
   test("the panel: each problem and recovery opens its page; every control named", () => {

@@ -161,7 +161,7 @@ function siteItem(page: AppPage, a: App, c: Connection, isMain: boolean) {
       h(
         "div",
         { class: "form-grid" },
-        field("Page must contain", h("input", { name: "expectText", maxlength: 200, value: str(s.expectText), placeholder: "Sign in" }), "Any case. If it's missing, the check fails: an error page or an empty app shell can answer 200."),
+        field("Page must contain", h("input", { name: "expectText", maxlength: 200, value: str(s.expectText), placeholder: "Sign in" }), "Any case. If it's missing, the check fails. Without it, any answer in the 200s counts as up, including an error page, a parked domain or an empty app shell."),
         field("JSON field", h("input", { name: "expectJson", maxlength: 200, value: str(s.expectJson), placeholder: "ok, or status=healthy" }), "For a health endpoint: the field must be there and not false, or equal what follows =."),
         field("Slow after (ms)", h("input", { name: "slowMs", type: "number", min: 100, max: 9000, step: 50, value: str(s.slowMs), placeholder: "Off" }), "Blank is off. Slower than this for several checks in a row needs attention, and you're told."),
         field(

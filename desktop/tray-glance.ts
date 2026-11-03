@@ -19,10 +19,11 @@ export const STATE_RANK: Record<GlanceState, number> = {
   down: 0,
   attention: 1,
   unknown: 2,
-  checking: 3,
-  up: 4,
-  prelaunch: 5,
-  none: 6,
+  stale: 3,
+  checking: 4,
+  up: 5,
+  prelaunch: 6,
+  none: 7,
 };
 
 const STATE_LABEL: Record<GlanceState, string> = {
@@ -30,22 +31,24 @@ const STATE_LABEL: Record<GlanceState, string> = {
   down: "Down",
   attention: "Needs attention",
   unknown: "Unknown",
+  stale: "No recent data",
   none: "No checks",
   prelaunch: "Not live yet",
   checking: "Checking…",
 };
 
 // The coloured dot beside each line, drawn like the page's lamps: filled for
-// up, down, attention and in progress, a ring for unknown, a dashed ring for
-// not live yet, a dash for nothing to check.
-export type Dot = "up" | "down" | "attention" | "info" | "unknown" | "prelaunch" | "none";
-export const DOTS: Dot[] = ["up", "down", "attention", "info", "unknown", "prelaunch", "none"];
+// up, down, attention and in progress, a ring for unknown, a ring with a dot
+// for no recent data, a dashed ring for not live yet, a dash for nothing to
+// check.
+export type Dot = "up" | "down" | "attention" | "info" | "unknown" | "stale" | "prelaunch" | "none";
+export const DOTS: Dot[] = ["up", "down", "attention", "info", "unknown", "stale", "prelaunch", "none"];
 
 // The status colours of web/src/tokens.css: the light theme's on a light menu
 // ("dark" tone, as for the menu glyphs), the dark theme's on a dark one.
 const DOT_COLOUR: Record<Tone, Record<Exclude<Dot, "none">, string>> = {
-  dark: { up: "#1a7f37", down: "#c9252d", attention: "#b5480b", info: "#0b62d6", unknown: "#5d6673", prelaunch: "#5d6673" },
-  light: { up: "#3fb950", down: "#ff6b61", attention: "#f0883e", info: "#58a6ff", unknown: "#8b949e", prelaunch: "#8b949e" },
+  dark: { up: "#1a7f37", down: "#c9252d", attention: "#b5480b", info: "#0b62d6", unknown: "#5d6673", stale: "#5d6673", prelaunch: "#5d6673" },
+  light: { up: "#3fb950", down: "#ff6b61", attention: "#f0883e", info: "#58a6ff", unknown: "#8b949e", stale: "#8b949e", prelaunch: "#8b949e" },
 };
 
 export function dotSvg(dot: Dot, tone: Tone): string {
@@ -54,9 +57,11 @@ export function dotSvg(dot: Dot, tone: Tone): string {
       ? `<rect x="6" y="11" width="12" height="2" rx="1" fill="${DOT_COLOUR[tone].unknown}"/>`
       : dot === "unknown"
         ? `<circle cx="12" cy="12" r="5.5" fill="none" stroke="${DOT_COLOUR[tone].unknown}" stroke-width="2"/>`
-        : dot === "prelaunch"
-          ? `<circle cx="12" cy="12" r="5.5" fill="none" stroke="${DOT_COLOUR[tone].prelaunch}" stroke-width="2" stroke-dasharray="3 2.2"/>`
-          : `<circle cx="12" cy="12" r="6.5" fill="${DOT_COLOUR[tone][dot]}"/>`;
+        : dot === "stale"
+          ? `<circle cx="12" cy="12" r="5.5" fill="none" stroke="${DOT_COLOUR[tone].stale}" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="${DOT_COLOUR[tone].stale}"/>`
+          : dot === "prelaunch"
+            ? `<circle cx="12" cy="12" r="5.5" fill="none" stroke="${DOT_COLOUR[tone].prelaunch}" stroke-width="2" stroke-dasharray="3 2.2"/>`
+            : `<circle cx="12" cy="12" r="6.5" fill="${DOT_COLOUR[tone][dot]}"/>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${shape}</svg>`;
 }
 
@@ -74,6 +79,7 @@ export const TEXT_MARKER: Record<Dot, string> = {
   attention: "!",
   info: "↻",
   unknown: "?",
+  stale: "…",
   up: "✓",
   prelaunch: "○",
   none: "–",
@@ -103,6 +109,7 @@ const DOT_OF: Record<GlanceState, Dot> = {
   down: "down",
   attention: "attention",
   unknown: "unknown",
+  stale: "stale",
   checking: "unknown",
   prelaunch: "prelaunch",
   none: "none",
@@ -162,20 +169,30 @@ export function buildGlance(apps: GlanceApp[], statuses: AppStatus[], max: numbe
   return { headline, lines, ...(hidden > 0 ? { more: { label: `and ${hidden} more…`, route: "#/" } } : {}) };
 }
 
+// The server isn't giving its status: what the tray said last is old news, so
+// it says that instead, and lists no app as if it knew.
+export const FAILED_POLLS_BEFORE_SAYING = 3;
+export const UNREACHABLE_TEXT = "Can't read your apps' status";
+export const unreachableGlance = (): Glance => ({ headline: { label: UNREACHABLE_TEXT, dot: "unknown" }, lines: [] });
+
 // Two glances that would draw the same menu: rebuilt only when this changes,
 // so a quiet minute doesn't make the open menu flicker.
 export const glanceKey = (g: Glance): string => JSON.stringify(g);
 
 // ── The tray icon ───────────────────────────────────────────────────────
 
-export type TrayVariant = "normal" | "down" | "attention";
-export const TRAY_VARIANTS: Exclude<TrayVariant, "normal">[] = ["down", "attention"];
+export type TrayVariant = "normal" | "down" | "attention" | "unknown" | "stale";
+export const TRAY_VARIANTS: Exclude<TrayVariant, "normal">[] = ["down", "attention", "unknown", "stale"];
 
-// Red when any app is down, amber when one needs attention, otherwise the
-// plain icon. Apps not live yet never colour it: they're quiet on purpose.
+// Red when any app is down, amber when one needs attention, grey when one's
+// state isn't known or has no recent data (the plain icon's green lamp would
+// say all is well), otherwise the plain icon. Apps not live yet never colour
+// it: they're quiet on purpose.
 export function trayVariant(statuses: AppStatus[]): TrayVariant {
   if (statuses.some((s) => s.state === "down")) return "down";
   if (statuses.some((s) => s.state === "attention")) return "attention";
+  if (statuses.some((s) => s.state === "unknown")) return "unknown";
+  if (statuses.some((s) => s.state === "stale")) return "stale";
   return "normal";
 }
 

@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { ActionDef, ActionResult, ActivityEntry, App, AppHistory, AppStatus, BlockedAction, ConfigReport, ConnectionDetails, FailureLog, ProtocolView, ProviderStatus, ServiceView } from "../shared/types.ts";
+import type { ActionDef, ActionResult, ActivityEntry, App, AppHistory, AppStatus, BlockedAction, ConfigReport, ConnectionDetails, FailureLog, NotificationsView, ProtocolView, ProviderStatus, ServiceView } from "../shared/types.ts";
 import { CONNECTIONS } from "../shared/catalog.ts";
 import { APPROVAL_TIMEOUT_MS } from "../server/agents/approvals.ts";
 import { PROTOCOL_ACTION_TIMEOUT_MS, PROTOCOL_TIMEOUT_MS } from "../server/protocol.ts";
@@ -59,13 +59,18 @@ export function createMcpServer(gc: PeriskoposClient, { progressEveryMs = 15_000
     {
       title: "List my apps",
       description:
-        "Lists every app watched by Periskopos with its state (up, down, attention, unknown), any open problem, 30-day uptime and whether the last push is live. Start here.",
+        "Lists every app watched by Periskopos with its state (up, down, attention, unknown, stale: no recent data, so not known to be up), any open problem, 30-day uptime over the time actually watched and whether the last push is live. watching lists anything wrong with Periskopos's own checks or alerts: while there is, what's listed may be out of date or a problem may have gone unannounced. Start here.",
       annotations: { title: "List my apps", ...readOnly },
     },
     () =>
       guarded(async () => {
-        const [{ apps }, { statuses }] = await Promise.all([gc.get<{ apps: App[] }>("/apps"), gc.get<{ statuses: AppStatus[] }>("/status")]);
-        return { apps: apps.map((a) => appSummary(a, statuses.find((s) => s.slug === a.slug))) };
+        const [{ apps }, { statuses }, notifications] = await Promise.all([
+          gc.get<{ apps: App[] }>("/apps"),
+          gc.get<{ statuses: AppStatus[] }>("/status"),
+          gc.get<NotificationsView>("/notifications"),
+        ]);
+        const watching = notifications.now.filter((n) => n.watching).map((n) => n.text);
+        return { ...(watching.length ? { watching } : {}), apps: apps.map((a) => appSummary(a, statuses.find((s) => s.slug === a.slug))) };
       }),
   );
 
@@ -90,15 +95,24 @@ export function createMcpServer(gc: PeriskoposClient, { progressEveryMs = 15_000
           gc.get<{ services: ServiceView[] }>("/services"),
           gc.get<{ protocol: ProtocolView }>(`${base}/protocol`),
         ]);
-        // A provider that fails to answer leaves a gap, not an error.
+        // A provider that fails to answer leaves a gap, not an error, and says so.
+        const couldNotRead: string[] = [];
         const details = (
           await Promise.all(
             app.connections
               .filter((c) => CONNECTIONS[c.type]?.role !== undefined || ["search", "errors", "payments", "logs"].includes(CONNECTIONS[c.type]?.shows ?? ""))
-              .map((c) => gc.get<{ details: ConnectionDetails }>(`${base}/connections/${encodeURIComponent(c.id)}/details`).then((r) => r.details, () => undefined)),
+              .map((c) =>
+                gc.get<{ details: ConnectionDetails }>(`${base}/connections/${encodeURIComponent(c.id)}/details`).then(
+                  (r) => r.details,
+                  () => {
+                    couldNotRead.push(CONNECTIONS[c.type]?.label ?? c.type);
+                    return undefined;
+                  },
+                ),
+              ),
           )
         ).filter((d): d is ConnectionDetails => d !== undefined);
-        return appDetail({ app, status, history, details, providers, activity, services, protocol });
+        return appDetail({ app, status, history, details, couldNotRead, providers, activity, services, protocol });
       }),
   );
 
