@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { Settings } from "../shared/types.ts";
+import type { DeliveryChannel, DeliveryFailure, Settings } from "../shared/types.ts";
 
 export const DEFAULT_SETTINGS: Settings = {
   watcherEnabled: true,
@@ -38,4 +38,25 @@ export function updateSettings(db: DatabaseSync, userId: string, patch: Partial<
     if (typeof patch[key] === typeof DEFAULT_SETTINGS[key]) upsert.run(userId, key, JSON.stringify(patch[key]));
   }
   return getSettings(db, userId);
+}
+
+// The last alert that couldn't reach me, by channel, until one does. Kept with
+// the settings but not one of them: nothing in Settings can set it.
+const DELIVERY_KEY = "deliveryFailure:";
+
+export function setDeliveryFailure(db: DatabaseSync, userId: string, channel: DeliveryChannel, failure?: { message: string; at: string }) {
+  const key = `${DELIVERY_KEY}${channel}`;
+  if (!failure) {
+    db.prepare("DELETE FROM settings WHERE user_id = ? AND key = ?").run(userId, key);
+    return;
+  }
+  db.prepare(
+    `INSERT INTO settings (user_id, key, value) VALUES (?, ?, ?)
+     ON CONFLICT (user_id, key) DO UPDATE SET value = excluded.value`,
+  ).run(userId, key, JSON.stringify(failure));
+}
+
+export function deliveryFailures(db: DatabaseSync, userId: string): DeliveryFailure[] {
+  const rows = db.prepare("SELECT key, value FROM settings WHERE user_id = ? AND key LIKE ?").all(userId, `${DELIVERY_KEY}%`) as { key: string; value: string }[];
+  return rows.map((r) => ({ channel: r.key.slice(DELIVERY_KEY.length) as DeliveryChannel, ...(JSON.parse(r.value) as { message: string; at: string }) }));
 }

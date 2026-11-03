@@ -12,15 +12,16 @@ import { updateSettings } from "../server/settings.ts";
 import { StatusService } from "../server/status.ts";
 import * as store from "../server/store.ts";
 import { duration } from "../shared/format.ts";
-import { Watcher, settleLiveChecks } from "../server/watcher.ts";
+import { STOPPED_AFTER_TICKS, TICK_MS, Watcher, defaultIsOnline, settleLiveChecks } from "../server/watcher.ts";
 
 // A site whose health the test controls.
 let healthy = true;
+let refusing = false;
 let site: ReturnType<typeof createServer>;
 let siteUrl = "";
 before(async () => {
   site = createServer((_req, res) => {
-    res.statusCode = healthy ? 200 : 503;
+    res.statusCode = refusing ? 403 : healthy ? 200 : 503;
     res.end();
   });
   await new Promise<void>((resolve) => site.listen(0, "127.0.0.1", resolve));
@@ -37,6 +38,7 @@ let userId: string;
 
 beforeEach(() => {
   healthy = true;
+  refusing = false;
   online = true;
   notices = [];
   db = openDb(":memory:");
@@ -190,6 +192,118 @@ describe("watch periods and gaps (FR-W6)", () => {
   });
 });
 
+describe("is this PC online?", () => {
+  test("one probe answering is enough; offline only when none does", async () => {
+    const dead = "http://127.0.0.1:1/";
+    assert.equal(await defaultIsOnline([dead, siteUrl]), true);
+    assert.equal(await defaultIsOnline([dead, dead]), false);
+  });
+});
+
+describe("a site that goes on refusing the check", () => {
+  const refusedAt = (minAgo: number) => history.recordCheck(db, app.id, site_().id, { state: "unknown", at: new Date(Date.now() - minAgo * 60_000).toISOString(), httpStatus: 403 });
+
+  test("nothing for the first hour", async () => {
+    refusing = true;
+    refusedAt(30);
+    await check();
+    assert.equal(notices.length, 0);
+    assert.equal(history.openIncidentFor(db, site_().id), undefined, "still no incident");
+  });
+
+  test("told once past the hour, not again, and no incident", async () => {
+    refusing = true;
+    refusedAt(70);
+    await check();
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0]!.title, "Test App is refusing Periskopos's checks");
+    assert.match(notices[0]!.body, /answered HTTP 403 for over an hour/);
+    await check();
+    assert.equal(notices.length, 1, "no repeat while it goes on");
+    assert.equal(history.openIncidentFor(db, site_().id), undefined);
+  });
+
+  test("an offline verdict isn't a refusal", async () => {
+    healthy = false;
+    online = false;
+    history.recordCheck(db, app.id, site_().id, { state: "unknown", at: new Date(Date.now() - 70 * 60_000).toISOString(), detail: "This PC is offline, so this check doesn't count" });
+    await watcher.checkConnection(app, site_());
+    assert.equal(notices.length, 0);
+  });
+});
+
+describe("how long an outage is said to have lasted", () => {
+  test("only the time watched, and it says part wasn't", async () => {
+    const H = 3_600_000;
+    const now = Date.now();
+    history.recordCheck(db, app.id, site_().id, { state: "down", at: new Date(now - 72 * H).toISOString(), detail: "x" });
+    history.openIncident(db, { appId: app.id, connectionId: site_().id, kind: "outage", startedAt: new Date(now - 72 * H).toISOString(), reason: "Answered HTTP 503" });
+    history.heartbeat(db, history.startPeriod(db, now - 72 * H), now - 72 * H + 10 * 60_000); // watched 10 min, then the PC slept
+    history.heartbeat(db, history.startPeriod(db, now - 60_000), now);
+    await check();
+    const said = notices.at(-1)!;
+    assert.equal(said.title, "Test App is back up");
+    assert.match(said.body, /^It was down for 1\d min\. Periskopos wasn't watching for another 2 d 23 h/);
+  });
+
+  test("watched throughout: just how long", async () => {
+    const now = Date.now();
+    history.openIncident(db, { appId: app.id, connectionId: site_().id, kind: "outage", startedAt: new Date(now - 10 * 60_000).toISOString(), reason: "Answered HTTP 503" });
+    history.heartbeat(db, history.startPeriod(db, now - 20 * 60_000), now);
+    await check();
+    assert.equal(notices.at(-1)!.body, "It was down for 10 min.");
+  });
+});
+
+describe("when the checks themselves stop", () => {
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+  test("ticks stuck behind a check that never ends are news, once, and so is the recovery", async () => {
+    let hold: Promise<void> | undefined;
+    class Stuck extends StatusService {
+      override async check(...args: Parameters<StatusService["check"]>) {
+        await hold;
+        return super.check(...args);
+      }
+    }
+    const stuck = new Watcher({
+      db,
+      notifier: { notify: async (n) => void notices.push(n) },
+      baseUrl: "http://localhost:4100",
+      status: new Stuck(0),
+      isOnline: async () => true,
+    });
+    const T0 = Date.now();
+    await stuck.tick(T0);
+
+    let release = () => {};
+    hold = new Promise((resolve) => (release = resolve));
+    const later = T0 + 60 * 60_000; // the next check is due, and never ends
+    const hung = stuck.tick(later);
+    for (let i = 1; i < STOPPED_AFTER_TICKS; i++) await stuck.tick(later + i * TICK_MS);
+    assert.equal(stuck.stoppedSince, undefined, "one short of the limit");
+    await stuck.tick(later + STOPPED_AFTER_TICKS * TICK_MS);
+    assert.equal(stuck.stoppedSince, new Date(T0).toISOString(), "since the last tick that got through");
+    await stuck.tick(later + (STOPPED_AFTER_TICKS + 1) * TICK_MS);
+    await settle();
+    assert.deepEqual(notices.map((n) => n.title), ["Periskopos has stopped checking your apps"]);
+
+    release();
+    await hung;
+    await settle();
+    assert.equal(stuck.stoppedSince, undefined);
+    assert.equal(notices.at(-1)?.title, "Periskopos is checking your apps again");
+  });
+
+  test("a PC that slept missed no ticks: nothing to say", async () => {
+    const T0 = Date.now();
+    await watcher.tick(T0);
+    await watcher.tick(T0 + 8 * 60 * 60_000);
+    assert.equal(watcher.stoppedSince, undefined);
+    assert.equal(notices.length, 0);
+  });
+});
+
 describe("uptime counts watched time only", () => {
   const H = 3_600_000;
   const T0 = Date.parse("2026-10-06T00:00:00Z");
@@ -200,6 +314,7 @@ describe("uptime counts watched time only", () => {
   }
 
   test("an outage while not watched doesn't count; one while watched does", () => {
+    db.prepare("UPDATE apps SET created_at = ?").run(new Date(T0).toISOString());
     period(T0, T0 + 10 * H); // watched 10 h
     // Down 1 h inside the watched time, and on through an unwatched night.
     const incident = history.openIncident(db, {
@@ -213,6 +328,33 @@ describe("uptime counts watched time only", () => {
     const { uptimePct, watchedMs } = history.uptime(db, app.id, T0, T0 + 24 * H, T0 + 24 * H);
     assert.equal(watchedMs, 10 * H);
     assert.equal(uptimePct, 90);
+  });
+
+  test("an app added or gone live an hour ago has an hour of uptime, not a month", () => {
+    const now = T0 + 30 * 24 * H;
+    period(T0, now);
+    db.prepare("UPDATE apps SET created_at = ?").run(new Date(T0).toISOString());
+    history.recordCheck(db, app.id, site_().id, { state: "up", at: new Date(now - H).toISOString() });
+    assert.equal(history.uptime(db, app.id, T0, now, now).watchedMs, H, "from the site's first check");
+    db.prepare("DELETE FROM checks").run();
+    db.prepare("UPDATE apps SET created_at = ?").run(new Date(now - 2 * H).toISOString());
+    assert.equal(history.uptime(db, app.id, T0, now, now).watchedMs, 2 * H, "from when it was added");
+    assert.equal(history.appHistory(db, app.id, now).watchedMin, 120, "the history page agrees");
+  });
+
+  test("while the site's checks couldn't tell, it's neither up nor down", () => {
+    const now = T0 + 10 * H;
+    db.prepare("UPDATE apps SET created_at = ?").run(new Date(T0).toISOString());
+    period(T0, now);
+    const record = (state: "up" | "unknown", at: number) => history.recordCheck(db, app.id, site_().id, { state, at: new Date(at).toISOString() });
+    record("up", T0);
+    record("unknown", T0 + 2 * H);
+    record("unknown", T0 + 3 * H);
+    record("up", T0 + 5 * H);
+    record("unknown", T0 + 9 * H);
+    assert.equal(history.uptime(db, app.id, T0, now, now).watchedMs, 6 * H, "3 h, and the last hour still can't tell");
+    const gaps = history.appHistory(db, app.id, now).gaps;
+    assert.ok(gaps.every((g) => Date.parse(g.from) >= now), "it's not time the watcher wasn't running");
   });
 
   test("never watched: no uptime figure at all", () => {

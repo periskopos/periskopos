@@ -26,7 +26,11 @@ let base = "";
 before(async () => {
   server = createServer((req, res) => {
     setTimeout(() => {
-      if (req.url === "/health") {
+      if (req.url === "/elsewhere") {
+        res.writeHead(302, { location: `http://localhost:${(server.address() as AddressInfo).port}/` }).end();
+      } else if (req.url === "/blocked" || req.url === "/limited") {
+        res.writeHead(req.url === "/blocked" ? 403 : 429).end();
+      } else if (req.url === "/health") {
         res.setHeader("content-type", "application/json");
         res.end(typeof health === "string" ? health : JSON.stringify(health));
       } else {
@@ -41,6 +45,25 @@ after(() => server.close());
 
 const conn = (path: string, settings: Record<string, unknown>): Connection => ({ id: "c_1", appId: "a_1", type: "site", resource: `${base}${path}`, settings });
 const badRequest = (fn: () => unknown, message: RegExp) => assert.throws(fn, (e: unknown) => e instanceof HttpError && e.status === 400 && message.test(e.message));
+
+describe("an answer that doesn't show the site is up", () => {
+  test("from another host: still up, and it says whose answer it is", async () => {
+    const r = await site.check!(conn("/elsewhere", {}));
+    assert.equal(r.state, "up");
+    assert.match(r.summary ?? "", /Answered from localhost, so this only shows that host is up/);
+    assert.equal((await site.check!(conn("/", {}))).summary, undefined);
+    assert.equal((await site.check!(conn("/elsewhere", { expectText: "Welcome" }))).summary, undefined, "the content was checked: it's the right page");
+  });
+
+  test("a refusal (a firewall, a rate limit) can't tell, rather than down", async () => {
+    for (const path of ["/blocked", "/limited"]) {
+      const r = await site.check!(conn(path, {}));
+      assert.equal(r.state, "unknown");
+      assert.match(r.detail ?? "", /may be blocking this check/);
+    }
+    assert.equal((await site.check!(conn("/blocked", { expectStatus: 403 }))).state, "up", "unless that's what it should answer");
+  });
+});
 
 describe("expected content", () => {
   beforeEach(() => {

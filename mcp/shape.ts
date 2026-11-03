@@ -1,4 +1,6 @@
 import type { ActionDef, ActivityEntry, App, AppHistory, AppStatus, BlockedAction, CheckResult, Commit, ConfigReport, ConnectionDetails, FailureLog, ProtocolView, ProviderStatus, SearchTotals, ServiceView, TrafficDetails, TrafficPoint, TrafficTotals } from "../shared/types.ts";
+import { mainSite } from "../shared/catalog.ts";
+import { duration } from "../shared/format.ts";
 
 // What the AI assistant is told (PRD §7.9). Every field is listed here on
 // purpose: a field that isn't named never reaches it, so no key, token,
@@ -20,11 +22,12 @@ export function appSummary(app: App, status: AppStatus | undefined) {
     name: app.name,
     url: app.url,
     state: status?.state ?? "unknown",
+    ...(status?.staleSince ? { note: `Last checked at ${status.staleSince}, too long ago to say how it is now` } : {}),
     ...(app.live ? {} : { live: false, note: "Not launched yet, so its site isn't checked and it isn't down" }),
     ...(status?.incident
       ? { problem: { kind: status.incident.kind, reason: status.incident.reason, since: status.incident.startedAt } }
       : {}),
-    ...(status?.uptime30d !== undefined ? { uptime30d: `${status.uptime30d}%` } : {}),
+    ...(status?.uptime30d !== undefined ? { uptime30d: `${status.uptime30d}%`, ...(status.uptimeWatchedMs !== undefined ? { uptimeOverWatchedTime: duration(status.uptimeWatchedMs) } : {}) } : {}),
     ...(push
       ? {
           lastPush: {
@@ -36,9 +39,16 @@ export function appSummary(app: App, status: AppStatus | undefined) {
         }
       : {}),
     ...(status?.metrics?.length ? { numbers: Object.fromEntries(status.metrics.map((m) => [m.label, m.value])) } : {}),
-    ...(status ? { checkedAt: newest(status.checks) } : {}),
+    // The check saying whether it's up, when there is one: a certificate checked
+    // just now says nothing about a site last checked hours ago.
+    ...(status ? { checkedAt: siteCheckedAt(app, status) ?? newest(status.checks) } : {}),
   };
 }
+
+const siteCheckedAt = (app: App, status: AppStatus) => {
+  const site = mainSite(app);
+  return site && status.checks[site.id]?.at;
+};
 
 export function configDetail(app: App, report: ConfigReport) {
   const open = report.findings.filter((f) => !f.ignored);
@@ -65,12 +75,13 @@ export function appDetail(input: {
   status: AppStatus | undefined;
   history: AppHistory | undefined;
   details: ConnectionDetails[];
+  couldNotRead?: string[]; // what's missing from details: absent isn't "nothing wrong"
   providers: ProviderStatus[];
   activity: ActivityEntry[];
   services: ServiceView[];
   protocol?: ProtocolView;
 }) {
-  const { app, status, history, details, providers, activity, services, protocol } = input;
+  const { app, status, history, details, couldNotRead, providers, activity, services, protocol } = input;
   const host = details.find((d) => d.shape === "deploys");
   const source = details.find((d) => d.shape === "commits");
   const search = details.find((d) => d.shape === "search");
@@ -80,6 +91,7 @@ export function appDetail(input: {
 
   return {
     ...appSummary(app, status),
+    ...(couldNotRead?.length ? { couldNotRead: { sources: couldNotRead, note: "Left out because they couldn't be read, so nothing can be said about them" } } : {}),
     ...(app.notes ? { notes: app.notes } : {}),
     checks: checkList(app, status, services),
     ...(host?.shape === "deploys"
@@ -174,6 +186,7 @@ export function appDetail(input: {
         return {
           provider: p.label,
           status: p.description,
+          ...(p.checkedAt ? { statusPageReadAt: p.checkedAt } : { note: "Its status page hasn't been read" }),
           forThisApp: p.relevantIndicator === "none" ? "fine (nothing reported in the parts this app uses)" : p.relevantIndicator,
           ...(incidents.length
             ? { incidents: incidents.map((i) => ({ name: i.name, impact: i.impact, ...(i.parts?.length ? { parts: i.parts } : {}), ...(i.startedAt ? { since: i.startedAt } : {}) })) }

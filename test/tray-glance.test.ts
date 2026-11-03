@@ -15,6 +15,7 @@ import {
   menuText,
   trayIconSvg,
   trayVariant,
+  unreachableGlance,
 } from "../desktop/tray-glance.ts";
 import { STATE_RANK as PAGE_RANK } from "../web/src/format.ts";
 
@@ -121,8 +122,15 @@ describe("the tray icon", () => {
   test("red when any app is down, amber when one needs attention, else plain", () => {
     assert.equal(trayVariant([status("a", "up"), status("b", "attention"), status("c", "down")]), "down");
     assert.equal(trayVariant([status("a", "up"), status("b", "attention")]), "attention");
-    assert.equal(trayVariant([status("a", "up"), status("b", "unknown"), status("c", "prelaunch")]), "normal");
+    assert.equal(trayVariant([status("a", "up"), status("b", "stale")]), "stale", "no recent data never wears the green lamp");
+    assert.equal(trayVariant([status("a", "stale"), status("b", "attention")]), "attention");
+    assert.equal(trayVariant([status("a", "up"), status("b", "unknown"), status("c", "prelaunch")]), "unknown", "not known never wears the green lamp either");
+    assert.equal(trayVariant([status("a", "up"), status("c", "prelaunch")]), "normal");
     assert.equal(trayVariant([]), "normal");
+  });
+
+  test("a server that isn't answering: it says so, and lists no app as if it knew", () => {
+    assert.deepEqual(unreachableGlance(), { headline: { label: "Can't read your apps' status", dot: "unknown" }, lines: [] });
   });
 
   test("a variant is the mark with its status lamp laid over in the state's colour", () => {

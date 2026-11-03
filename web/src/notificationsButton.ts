@@ -15,11 +15,16 @@ import type { Popover } from "./popover.ts";
 
 export type NotificationsButton = { root: HTMLElement; show: (view: NotificationsView) => void; fail: (message: string) => void };
 
-// "1 down · 2 need attention", or "All normal".
+// What the count counts: something switched off on purpose stays listed, but
+// isn't a number that can never go away.
+const counted = (now: NotificationItem[]) => now.filter((n) => !n.deliberate);
+
+// "1 down · 2 need attention · 1 switched off", or "All normal".
 export function summaryOf(now: NotificationItem[]): string {
   const down = now.filter((n) => n.state === "down").length;
-  const attention = now.length - down;
-  const parts = [down && `${down} down`, attention && `${attention} need${attention === 1 ? "s" : ""} attention`].filter(Boolean);
+  const attention = counted(now).length - down;
+  const off = now.length - counted(now).length;
+  const parts = [down && `${down} down`, attention && `${attention} need${attention === 1 ? "s" : ""} attention`, off && `${off} switched off`].filter(Boolean);
   return parts.length ? parts.join(" · ") : "All normal";
 }
 
@@ -72,8 +77,8 @@ export function buildNotificationsButton(): NotificationsButton {
   const show = (view: NotificationsView) => {
     const summary = summaryOf(view.now);
     const down = view.now.some((n) => n.state === "down");
-    badge.hidden = view.now.length === 0;
-    badge.textContent = String(view.now.length);
+    badge.hidden = counted(view.now).length === 0;
+    badge.textContent = String(counted(view.now).length);
     badge.className = `notify-badge${down ? " notify-badge--down" : ""}`;
     button.setAttribute("aria-label", `Notifications: ${summary}`);
     button.title = summary;

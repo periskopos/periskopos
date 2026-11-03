@@ -616,6 +616,7 @@ describe("which parts of a provider my apps use", () => {
     assert.equal(relevantIndicator(f([{ name: "a", impact: "major", parts: ["Copilot"] }]), inUse), "none");
     assert.equal(relevantIndicator(f([], [{ name: "m", status: "in_progress", parts: ["Actions"] }]), inUse), "maintenance");
     assert.equal(relevantIndicator(f([], [{ name: "m", status: "scheduled", parts: ["Actions"] }]), inUse), "none", "planned isn't happening yet");
+    assert.equal(relevantIndicator(f([]), inUse), "major", "degraded, with nothing listed to say where: it may be my parts");
   });
 
   test("parts, status, start and maintenance are read from the summary", () => {

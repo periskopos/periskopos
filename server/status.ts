@@ -70,3 +70,21 @@ export function overallState(all: { conn: Connection; result: CheckResult }[], l
   if (unknown.some(outage) || unknown.length === checks.length) return "unknown";
   return "up";
 }
+
+// A check is out of date once it has missed two rounds, with a little room
+// for one that's merely late.
+const STALE_SLACK_MS = 2 * 60_000;
+export const staleAfterMs = (conn: Connection, checkIntervalMin: number) =>
+  2 * (integrations[conn.type]?.everyMs ?? checkIntervalMin * 60_000) + STALE_SLACK_MS;
+
+// When the checks that say an app is up last ran, if that's too long ago to
+// still say so. Like "unknown" above: it takes the check saying whether the
+// app is up, or every check when none says that, so a daily certificate check
+// never decides it.
+export function staleSince(all: { conn: Connection; result: CheckResult }[], checkIntervalMin: number, now = Date.now()): string | undefined {
+  const outage = all.filter((c) => (integrations[c.conn.type]?.incidentKind ?? "outage") === "outage");
+  const deciding = outage.length ? outage : all;
+  const old = deciding.filter((c) => now - Date.parse(c.result.at) > staleAfterMs(c.conn, checkIntervalMin));
+  if (old.length === 0 || (!outage.length && old.length < all.length)) return undefined;
+  return old.map((c) => c.result.at).sort()[0];
+}

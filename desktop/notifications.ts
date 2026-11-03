@@ -17,8 +17,12 @@ export function showNotification(
   icon: string | undefined,
   onClick: () => void,
   onFailed: (message: string) => void,
+  onShown: () => void = () => {},
 ): void {
-  if (!Notification.isSupported()) return;
+  if (!Notification.isSupported()) {
+    onFailed(`notification "${notice.title}" couldn't be shown: this system doesn't support notifications`);
+    return;
+  }
   // An alarm sounds until it's dismissed: Windows' looping alarm toast, a
   // sound on a Mac, a critical notification on Linux.
   const alarm = notice.alarm
@@ -36,6 +40,7 @@ export function showNotification(
     release();
     onFailed(`notification "${notice.title}" was refused by the OS: ${error}`);
   });
+  shown.on("show", onShown);
   shown.on("click", () => {
     release();
     onClick();

@@ -24,7 +24,7 @@ export function overview(page: AppPage, a: App) {
   // when it hasn't.
   const main = [
     section("Checks", {
-      list: h("ul", { class: "list" }, checks.map((c) => (!a.live && SITE_CHECKS.has(c.type) ? waitingItem(c) : checkItem(c, status?.checks[c.id], a.checkIntervalMin)))),
+      list: h("ul", { class: "list" }, checks.map((c) => (!a.live && SITE_CHECKS.has(c.type) ? waitingItem(c) : checkItem(c, status?.checks[c.id], a.checkIntervalMin, status?.state === "stale" ? status.staleSince : undefined)))),
       body: checks.length === 0 ? [empty("Nothing is checked.")] : undefined,
     }),
 
@@ -86,9 +86,10 @@ function waitingItem(conn: Connection) {
   );
 }
 
-function checkItem(conn: Connection, result: CheckResult | undefined, everyMin: number) {
-  // A failed deploy or red CI is "needs attention": the app still serves.
-  const state = !result ? "checking" : result.state === "down" && !isOutageType(conn.type) ? "attention" : result.state;
+function checkItem(conn: Connection, result: CheckResult | undefined, everyMin: number, staleSince?: string) {
+  // A failed deploy or red CI is "needs attention": the app still serves. The
+  // check that made the app "no recent data" doesn't get to look green.
+  const state = !result ? "checking" : result.at === staleSince ? "stale" : result.state === "down" && !isOutageType(conn.type) ? "attention" : result.state;
   return h(
     "li",
     { class: "item" },

@@ -37,6 +37,7 @@ beforeEach(() => {
   app = store.createApp(db, user.id, { name: "Star-Map", url: "https://example.org/" });
   const site = app.connections.find((c) => c.type === "site")!;
   // Watched for the last 10 hours, down for one of them.
+  db.prepare("UPDATE apps SET created_at = ? WHERE id = ?").run(new Date(NOW - 11 * HOUR).toISOString(), app.id);
   history.heartbeat(db, history.startPeriod(db, NOW - 10 * HOUR), NOW);
   outage = history.openIncident(db, { appId: app.id, connectionId: site.id, kind: "outage", startedAt: new Date(NOW - 3 * HOUR).toISOString(), reason: "Site is down: timed out" });
   history.closeIncident(db, outage.id, new Date(NOW - 2 * HOUR).toISOString());

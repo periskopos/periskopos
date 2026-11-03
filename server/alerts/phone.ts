@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Settings } from "../../shared/types.ts";
 import type { Notice, Notifier } from "./notify.ts";
 import { readSecret } from "../keys/secrets.ts";
-import { getSettings } from "../settings.ts";
+import { getSettings, setDeliveryFailure } from "../settings.ts";
 import * as store from "../store.ts";
 
 // Phone alerts (the landscape notes §5.1): the same notifications the desktop
@@ -97,17 +97,45 @@ export async function findTelegramChat(): Promise<{ id: string; name: string } |
 }
 
 // The desktop notifier, plus the phone when phone alerts are on. The phone
-// never holds up or breaks the desktop notification: a failure is logged.
-export function withPhone(local: Notifier, db: DatabaseSync): Notifier {
+// never holds up or breaks the desktop notification. An alert that couldn't
+// reach me is kept until one does, since the alert itself can't say so: the
+// bell shows it (server/alerts/notifications.ts).
+const PHONE_RETRIES_MS = [30_000, 2 * 60_000];
+
+export function withPhone(local: Notifier, db: DatabaseSync, retriesMs: readonly number[] = PHONE_RETRIES_MS): Notifier {
+  const toPhone = async (s: Settings, userId: string, notice: Notice) => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await sendToPhone(s, notice);
+        setDeliveryFailure(db, userId, "phone");
+        return;
+      } catch (err) {
+        const message = (err as Error).message;
+        console.error(`Couldn't send the phone alert: ${message}`);
+        const wait = retriesMs[attempt];
+        if (wait === undefined) {
+          setDeliveryFailure(db, userId, "phone", { message, at: new Date().toISOString() });
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, wait).unref());
+      }
+    }
+  };
   return {
     async notify(notice) {
       const user = store.getLocalUser(db);
       const s = user && getSettings(db, user.id);
-      if (s) {
-        // sendToPhone does nothing when phone alerts are off.
-        void sendToPhone(s, notice).catch((err: unknown) => console.error(`Couldn't send the phone alert: ${(err as Error).message}`));
+      if (user && s) {
+        if (s.phoneChannel === "off") setDeliveryFailure(db, user.id, "phone");
+        else void toPhone(s, user.id, notice);
       }
-      await local.notify(notice);
+      try {
+        await local.notify(notice);
+        if (user) setDeliveryFailure(db, user.id, "desktop");
+      } catch (err) {
+        if (user) setDeliveryFailure(db, user.id, "desktop", { message: (err as Error).message, at: new Date().toISOString() });
+        throw err;
+      }
     },
   };
 }

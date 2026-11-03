@@ -193,6 +193,9 @@ export function relevantIndicator(f: Fetched, inUse: Set<string> | undefined): P
   if (f.indicator === "unknown") return "unknown";
   const hits = f.incidents.filter((i) => affects(i.parts, inUse));
   if (hits.length) return BY_RANK[Math.max(1, ...hits.map((i) => RANK[i.impact] ?? 1))] ?? "minor";
+  // The page says it's degraded and lists nothing to say where: it may be in
+  // the parts my apps use, so it isn't "nothing".
+  if (f.incidents.length === 0 && !f.maintenance?.length && (f.indicator === "minor" || f.indicator === "major" || f.indicator === "critical")) return f.indicator;
   const working = (f.maintenance ?? []).some((m) => m.status !== "scheduled" && affects(m.parts, inUse));
   return working || (f.indicator === "maintenance" && !f.maintenance) ? "maintenance" : "none";
 }

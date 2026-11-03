@@ -571,7 +571,11 @@ export const github: Integration = {
     try {
       const [latest, all] = await Promise.all([this.latestCommit!(conn, auth), runs(conn, auth)]);
       // A token that can't read checks still gets its CI verdict.
-      const builds = await failedWorkersBuilds(conn, auth, latest).catch((): FailedBuild[] => []);
+      let buildsUnread = false;
+      const builds = await failedWorkersBuilds(conn, auth, latest).catch((): FailedBuild[] => {
+        buildsUnread = true;
+        return [];
+      });
       const current = latestPerWorkflow(all);
       const failing = current.filter((r) => runState(r) === "failing");
       const running = all.some((r) => runState(r) === "running");
@@ -590,7 +594,8 @@ export const github: Integration = {
       // Only runs still going, none finished to judge by: no verdict yet.
       if (current.length === 0 && running) return { state: "unknown", at, detail: "CI is running; no run has finished yet", summary: `CI running · ${change}` };
       const ci = current.length === 0 ? "No CI" : running ? "CI running" : "CI passing";
-      return { state: "up", at, summary: `${ci} · ${change}` };
+      // "Passing" shouldn't vouch for builds it couldn't read.
+      return { state: "up", at, summary: `${ci} · ${change}${buildsUnread ? " · builds couldn't be read" : ""}` };
     } catch (err) {
       return { state: "unknown", at, detail: (err as Error).message };
     }

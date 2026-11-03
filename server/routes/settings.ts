@@ -4,7 +4,7 @@ import { HttpError, badRequest } from "../errors.ts";
 import { PHONE_SECRETS, findTelegramChat, phoneSecretsSet, sendToPhone } from "../alerts/phone.ts";
 import type { PhoneSecret } from "../alerts/phone.ts";
 import { envFile, pastedKey, writeSecret } from "../keys/secrets.ts";
-import { getSettings, updateSettings } from "../settings.ts";
+import { getSettings, setDeliveryFailure, updateSettings } from "../settings.ts";
 import { startupStatus } from "../startup.ts";
 import { httpUrl, text } from "../validate.ts";
 import { jsonBody, pasted, router } from "./context.ts";
@@ -111,6 +111,14 @@ export function settingsRoutes({ db, approvals, notifier, port, backups }: Route
       throw new HttpError(500, `The backup couldn't be made: ${(err as Error).message}`);
     }
     return c.json({ backups: backups.status() });
+  });
+
+  // The desktop app shows notifications itself, so only it knows whether the
+  // OS took one: { message } when it refused, nothing when it was shown.
+  r.post("/notifications/delivery", async (c) => {
+    const { message } = (await c.req.json().catch(() => ({}))) as { message?: unknown };
+    setDeliveryFailure(db, c.var.user.id, "desktop", typeof message === "string" ? { message: message.slice(0, 200), at: new Date().toISOString() } : undefined);
+    return c.json({ ok: true });
   });
 
   // { alarm: true }: the alarm a provider's incident sounds, to hear it.
