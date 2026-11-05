@@ -190,6 +190,36 @@ describe("github", () => {
     assert.deepEqual(latest.map((r) => r.id), [1, 3]);
   });
 
+  test("CI: a failed Dependabot job isn't failing CI, but other jobs GitHub runs still count", async () => {
+    const { ghService } = setUp();
+    const run = (id: number, workflow_id: number, name: string, path: string, conclusion: string, msAgo: number) => ({ id, workflow_id, name, path, status: "completed", conclusion, head_sha: "aaa", created_at: iso(msAgo), html_url: "" });
+    const dependabot = run(2, 9, "npm_and_yarn in /. for minimatch - Update #1", "dynamic/dependabot/dependabot-updates", "failure", 2 * H);
+    const ci = run(3, 7, "CI", ".github/workflows/ci.yml", "success", H);
+    fake.commits = [commit("aaa", H)];
+    fake.runs = [ci, dependabot];
+    let r = await github.check!(gh, authFor(ghService));
+    assert.equal(r.state, "up", "CI passed: the Dependabot job says nothing about the code");
+    assert.match(r.summary!, /^CI passing/);
+
+    clearHttpCache();
+    fake.runs = [dependabot];
+    r = await github.check!(gh, authFor(ghService));
+    assert.equal(r.state, "up");
+    assert.match(r.summary!, /^No CI/, "Dependabot's jobs aren't CI passing either");
+
+    clearHttpCache();
+    fake.runs = [run(4, 8, "pages build and deployment", "dynamic/pages/pages-build-deployment", "failure", 60_000), ci];
+    r = await github.check!(gh, authFor(ghService));
+    assert.equal(r.state, "down", "a failed Pages deployment is still a problem");
+    assert.match(r.detail!, /pages build and deployment/);
+
+    clearHttpCache();
+    fake.runs = [run(5, 7, "CI", ".github/workflows/ci.yml", "failure", 60_000), dependabot];
+    r = await github.check!(gh, authFor(ghService));
+    assert.equal(r.state, "down", "real CI failing still shows");
+    assert.equal(r.detail, "CI failing on main");
+  });
+
   test("CI: a run still going doesn't clear a failure, and alone gives no verdict", async () => {
     const { ghService } = setUp();
     const run = (id: number, workflow_id: number, status: string, conclusion: string | null, msAgo: number) => ({ id, workflow_id, name: `wf${workflow_id}`, status, conclusion, head_sha: "aaa", created_at: iso(msAgo), html_url: "" });

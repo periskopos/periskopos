@@ -22,6 +22,7 @@ type GhRun = {
   head_sha: string;
   created_at: string;
   html_url: string;
+  path?: string;
 };
 
 async function gh<T>(auth: ServiceAuth, path: string): Promise<T> {
@@ -93,13 +94,21 @@ const toRun = (r: GhRun): CiRun => ({
   url: r.html_url,
 });
 
+// Dependabot's own jobs are listed with a repo's workflow runs, but they say
+// nothing about the code: one fails when it can't make an update, and stays the
+// newest run of its "workflow" until its next run, often a week later. Other jobs
+// GitHub runs by itself, like a Pages deployment, can be a real problem and stay.
+const isDependabotJob = (r: GhRun) => r.path?.startsWith("dynamic/dependabot/") === true;
+
 async function runs(conn: Connection, auth: ServiceAuth): Promise<GhRun[]> {
   const { branch } = settingsOf(conn);
+  // The most a page holds: a batch of Dependabot jobs can fill a shorter list and
+  // leave no real CI run in it.
   const { workflow_runs } = await gh<{ workflow_runs: GhRun[] }>(
     auth,
-    `/repos/${conn.resource}/actions/runs?branch=${enc(branch)}&per_page=30`,
+    `/repos/${conn.resource}/actions/runs?branch=${enc(branch)}&per_page=100`,
   );
-  return workflow_runs;
+  return workflow_runs.filter((r) => !isDependabotJob(r));
 }
 
 // The newest finished run of each workflow: what "CI on main" means right
