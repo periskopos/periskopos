@@ -4,6 +4,12 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
+## Next release
+
+- **A failed Dependabot job isn't failing CI:** when Dependabot can't make an
+  update, the app no longer shows "CI failing". Real CI failures and other jobs
+  GitHub runs, like a Pages deployment, still count.
+
 ## 0.4.0 (2026-11-03)
 
 - **No recent data:** an app that looked up when last checked, but whose check
