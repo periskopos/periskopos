@@ -1,6 +1,6 @@
 {
   "name": "periskopos",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
   "description": "Every app you ship, watched from one window: a desktop app for uptime, deploys, configuration, errors and expiring certificates across your hosts and services, with your keys kept on your PC.",
