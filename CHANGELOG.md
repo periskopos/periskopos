@@ -4,7 +4,7 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
-## Next release
+## 0.5.0 (2026-11-10)
 
 - **The World:** a second way to see the Apps page, as your own Silicon Valley, drawn from
   your real data. A highway comes in from the side and becomes a curving main road, with a
