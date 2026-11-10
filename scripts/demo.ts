@@ -3,10 +3,11 @@
 // from here and the network shut. Nothing in it is anyone's real app, and
 // nothing it does reaches the internet.
 //
-//   node scripts/demo.ts [--port 4199] [--fresh]
+//   node scripts/demo.ts [--port 4199] [--fresh] [--dir data/demo]
 //
-// The session key is written to data/demo/session-key, for the capture
-// script (scripts/demo-capture.ts) and for opening it in a browser by hand.
+// The session key is written to <dir>/session-key, for the capture script
+// (scripts/demo-capture.ts, which runs its own in data/demo-capture) and for
+// opening it in a browser by hand. --dir keeps two demos apart.
 
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -27,8 +28,11 @@ import type {
 } from "../shared/types.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DIR = path.join(ROOT, "data", "demo");
 const arg = (name: string) => process.argv[process.argv.indexOf(name) + 1];
+const DIR = process.argv.includes("--dir") ? path.resolve(ROOT, arg("--dir")) : path.join(ROOT, "data", "demo");
+// --fresh empties it: only ever a folder under data/.
+const inData = path.relative(path.join(ROOT, "data"), DIR);
+if (!inData || inData.startsWith("..") || path.isAbsolute(inData)) throw new Error(`--dir must be a folder inside data/, not ${DIR}`);
 const PORT = process.argv.includes("--port") ? Number(arg("--port")) : 4199;
 if (!Number.isInteger(PORT) || PORT < 1024 || PORT > 65535) throw new Error(`--port takes a port from 1024 to 65535, not "${arg("--port")}"`);
 
@@ -588,5 +592,5 @@ writeFileSync(path.join(DIR, "session-key"), token);
 serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" }, () => {
   // The watcher stays off: the history above is the demo's, and a check
   // runs only on Check now.
-  console.log(`Demo Periskopos at http://localhost:${PORT} (session key in ${path.join("data", "demo", "session-key")})`);
+  console.log(`Demo Periskopos at http://localhost:${PORT} (session key in ${path.relative(ROOT, path.join(DIR, "session-key"))})`);
 });

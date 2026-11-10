@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ACCOUNTS, connectionLabel, isExtraSite } from "../shared/catalog.ts";
 import { KEY_WARN_DAYS, daysLeft, duration } from "../shared/format.ts";
-import type { App, CheckResult, Connection, Incident, PlanUsage, Service, ServiceType, UsageMeter } from "../shared/types.ts";
+import type { AlertKind, App, CheckResult, Connection, Incident, PlanUsage, Service, ServiceType, UsageMeter } from "../shared/types.ts";
 import { AUDIT_EVERY_MS, auditApp, lastAuditAt } from "./audits/audit.ts";
 import type { Checks } from "./audits/audit.ts";
 import { UNREADABLE_AFTER_MS } from "./alerts/notifications.ts";
@@ -10,10 +10,11 @@ import { SERVICE_TYPES, integrations } from "./integrations/index.ts";
 import { testKey } from "./keys/keys.ts";
 import type { KeyResult } from "./keys/keys.ts";
 import type { Notifier } from "./alerts/notify.ts";
+import { alertKindOf, heldDue, heldSummary, pausedUntil, wanted } from "./alerts/rules.ts";
 import { PROVIDER_EVERY_MS, affects, fetchProvider, getStored, isDegraded, partsInUse, providersInUse, relevantIndicator, store_ as storeProvider } from "./providers.ts";
 import type { Fetched } from "./providers.ts";
 import { authFor, keyState, readSecret } from "./keys/secrets.ts";
-import { getSettings } from "./settings.ts";
+import { getSettings, heldAlerts, setHeldAlerts } from "./settings.ts";
 import { StatusService } from "./status.ts";
 import * as store from "./store.ts";
 
@@ -125,6 +126,7 @@ export function settleLiveChecks(db: DatabaseSync, app: App, at = new Date().toI
 // Offline only if neither answers: one big site down or blocked here mustn't
 // turn a real outage into "this PC is offline". Only a HEAD, with nothing about
 // me or my apps in it. The privacy page names these: change them together.
+const HELD_TRIES = 3;
 const ONLINE_PROBES = ["https://github.com", "https://www.cloudflare.com"];
 
 export async function defaultIsOnline(probes: readonly string[] = ONLINE_PROBES): Promise<boolean> {
@@ -154,6 +156,7 @@ export class Watcher {
   #missedTicks = 0;
   #lastGoodTick: number | undefined;
   #stoppedSince: string | undefined;
+  #heldTries = 0;
   // connection id → when it was last checked, and which resource that was:
   // editing an app's URL keeps the connection id but points it at a new
   // host, and the new host hasn't been checked at all.
@@ -204,6 +207,9 @@ export class Watcher {
   async tick(now = Date.now()) {
     if (this.#busy) {
       this.#missedTick(now);
+      // A stuck check mustn't keep back what a pause held.
+      const stuckUser = store.getLocalUser(this.#db);
+      if (stuckUser) await this.#sayWhatWasHeld(stuckUser.id, now).catch((err) => console.error("Couldn't say what was held:", err));
       return;
     }
     this.#busy = true;
@@ -211,6 +217,8 @@ export class Watcher {
     let failed = false;
     try {
       const user = store.getLocalUser(this.#db);
+      // Before anything else: a pause can end while the checks are switched off.
+      if (user) await this.#sayWhatWasHeld(user.id, now);
       // Switched off: no heartbeat, so this time shows as not watched.
       if (!user || !getSettings(this.#db, user.id).watcherEnabled) return;
 
@@ -224,7 +232,7 @@ export class Watcher {
       if (now - this.#lastMaintenance >= MAINTENANCE_MS) {
         this.#lastMaintenance = now;
         history.rollUp(this.#db, now);
-        history.prune(this.#db, now);
+        history.prune(this.#db, now, getSettings(this.#db, user.id).checksKeptDays);
       }
 
       const due: [App, Connection][] = [];
@@ -273,7 +281,7 @@ export class Watcher {
   async #announceChecks(notice: { title: string; body: string }) {
     try {
       const user = store.getLocalUser(this.#db);
-      if (user) await this.#announce(user.id, notice);
+      if (user) await this.#announce(user.id, null, notice);
     } catch (err) {
       console.error("Couldn't say the checks stopped:", err);
     }
@@ -407,7 +415,7 @@ export class Watcher {
     const longEnough = (at: string) => Date.parse(at) - Date.parse(since) >= UNREADABLE_AFTER_MS;
     if (longEnough(previousAt) || !longEnough(result.at)) return;
     const name = isExtraSite(app, conn) ? `${app.name} · ${connectionLabel(conn)}` : app.name;
-    await this.#notify(app, { title: `${name} is refusing Periskopos's checks`, body: `It has answered HTTP ${result.httpStatus} for over an hour. A firewall or rate limit may be blocking only the check, or visitors too: Periskopos can't tell.` });
+    await this.#notify(app, "outages", { title: `${name} is refusing Periskopos's checks`, body: `It has answered HTTP ${result.httpStatus} for over an hour. A firewall or rate limit may be blocking only the check, or visitors too: Periskopos can't tell.` });
   }
 
   async #track(app: App, conn: Connection, result: CheckResult) {
@@ -435,7 +443,7 @@ export class Watcher {
         const watched = history.watchedMsBetween(this.#db, from, to);
         const partial = watched > 0 && to - from - watched >= history.GAP_MS;
         const notice = words("up", open.reason, partial ? watched : to - from);
-        await this.#notify(app, partial ? { ...notice, body: `${notice.body} Periskopos wasn't watching for another ${duration(to - from - watched)}, so it could have been longer or shorter.` } : notice);
+        await this.#notify(app, alertKindOf(integration?.incidentKind), partial ? { ...notice, body: `${notice.body} Periskopos wasn't watching for another ${duration(to - from - watched)}, so it could have been longer or shorter.` } : notice);
       }
       await this.#trackSlow(app, conn, result, slow, name);
       return;
@@ -468,7 +476,7 @@ export class Watcher {
       startedAt: needed > 1 ? previous!.at : result.at,
       reason: result.detail ?? "Not responding",
     });
-    await this.#notify(app, words("down", incident.reason, 0));
+    await this.#notify(app, alertKindOf(integration?.incidentKind), words("down", incident.reason, 0));
   }
 
   // How far apart two checks in a row can be and still be "in a row".
@@ -490,7 +498,7 @@ export class Watcher {
     if (open) {
       if (isSlow(result)) return;
       history.closeIncident(this.#db, open.id, result.at);
-      await this.#notify(app, { title: `${name} is fast again`, body: `It answers in ${result.ms} ms. It was slow for ${duration(Date.parse(result.at) - Date.parse(open.startedAt))}.` });
+      await this.#notify(app, "outages", { title: `${name} is fast again`, body: `It answers in ${result.ms} ms. It was slow for ${duration(Date.parse(result.at) - Date.parse(open.startedAt))}.` });
       return;
     }
     if (!isSlow(result)) return;
@@ -508,7 +516,7 @@ export class Watcher {
       startedAt: first.at,
       reason: `Answering in ${result.ms} ms, over ${slowness.overMs} ms for ${slowness.checks} checks in a row`,
     });
-    await this.#notify(app, { title: `${name} is slow`, body: incident.reason });
+    await this.#notify(app, "outages", { title: `${name} is slow`, body: incident.reason });
   }
 
   // Provider status pages, once per provider however many apps use it
@@ -557,14 +565,14 @@ export class Watcher {
       this.#announced.set(type, true);
       const incident = fetched.incidents.find((i) => affects(i.parts, inUse));
       const parts = incident?.parts?.length ? ` (${incident.parts.slice(0, 3).join(", ")})` : "";
-      await this.#announce(ownerId, {
+      await this.#announce(ownerId, "providers", {
         title: `${label} reports an incident`,
         body: `${incident?.name ?? fetched.description}${parts}${names ? ` · affects ${names}` : ""}`,
         ...(getSettings(this.#db, ownerId).incidentAlarm ? { alarm: true as const } : {}),
       });
     } else if (relevant === "none" && announced) {
       this.#announced.set(type, false);
-      await this.#announce(ownerId, { title: `${label} is back to normal`, body: names ? `Affected: ${names}` : "Its status page reports no incident." });
+      await this.#announce(ownerId, "providers", { title: `${label} is back to normal`, body: names ? `Affected: ${names}` : "Its status page reports no incident." });
     }
   }
 
@@ -598,6 +606,7 @@ export class Watcher {
       const expired = before.expiresAt && Date.parse(before.expiresAt) <= now;
       await this.#announce(
         service.ownerId,
+        "accounts",
         {
           title: `${name}: key stopped working`,
           body: expired ? `It expired on ${before.expiresAt!.slice(0, 10)}. Make a new one and choose Change key.` : result.message,
@@ -605,12 +614,13 @@ export class Watcher {
         "#/services",
       );
     } else if (before && !before.ok && result.ok) {
-      await this.#announce(service.ownerId, { title: `${name}: key works again`, body: result.message }, "#/services");
+      await this.#announce(service.ownerId, "accounts", { title: `${name}: key works again`, body: result.message }, "#/services");
     }
     if (result.ok && result.expiresAt && expiresSoon(result) && !(before?.ok && before.expiresAt === result.expiresAt && expiresSoon(before))) {
       const days = daysLeft(result.expiresAt, now);
       await this.#announce(
         service.ownerId,
+        "accounts",
         {
           title: `${name}: key expires in ${days} day${days === 1 ? "" : "s"}`,
           body: `On ${result.expiresAt.slice(0, 10)}. Make a new one and choose Change key before then.`,
@@ -655,6 +665,7 @@ export class Watcher {
       const resets = duration(Math.max(0, Date.parse(meter.resetsAt) - now));
       await this.#announce(
         service.ownerId,
+        "accounts",
         level === "over"
           ? { title: `${service.name}: over the free plan's limit`, body: `${meter.label}: ${meter.used.toLocaleString("en")} of ${meter.limit.toLocaleString("en")}. Requests fail until it resets in ${resets}${plan ? `, or move to ${plan.paid}` : ""}.` }
           : { title: `${service.name}: ${pct}% of the free plan's limit`, body: `${meter.label}: ${meter.used.toLocaleString("en")} of ${meter.limit.toLocaleString("en")}. It resets in ${resets}.` },
@@ -675,7 +686,7 @@ export class Watcher {
       try {
         const { fresh } = await auditApp(this.#db, app, this.#audits);
         for (const f of fresh.filter((x) => x.severity === "high")) {
-          await this.#notify(app, { title: `${app.name}: ${f.title}`, body: f.why }, "config");
+          await this.#notify(app, "warnings", { title: `${app.name}: ${f.title}`, body: f.why }, "config");
         }
       } catch (err) {
         console.error(`Couldn't check ${app.name}'s configuration:`, err);
@@ -683,8 +694,43 @@ export class Watcher {
     }
   }
 
-  async #announce(ownerId: string, notice: { title: string; body: string; alarm?: true }, page = "#/") {
-    if (!getSettings(this.#db, ownerId).notificationsEnabled) return;
+  // Whether an alert goes out now: Notify me, then its kind, then any pause,
+  // which holds it for later. `kind` null is about the checks themselves, which
+  // no switch of a kind turns off, and which a pause drops rather than holds.
+  #shouldSay(ownerId: string, kind: AlertKind | null, title: string, appId?: string): boolean {
+    const settings = getSettings(this.#db, ownerId);
+    if (!settings.notificationsEnabled) return false;
+    if (kind && !wanted(settings, kind)) return false;
+    if (!pausedUntil(settings, appId, Date.now())) return true;
+    // Said days late and out of its moment, "checks stopped" would only confuse: dropped.
+    if (kind === null) return false;
+    setHeldAlerts(this.#db, ownerId, [...heldAlerts(this.#db, ownerId), { title, ...(appId ? { appId } : {}), ...(kind ? { kind } : {}) }]);
+    return false;
+  }
+
+  // A pause has ended: one message for all it held back. Taken off the list
+  // first, so two ticks can't both send it. If it can't be shown it goes back
+  // on, for a few more tries rather than every tick for ever.
+  async #sayWhatWasHeld(ownerId: string, now: number) {
+    const held = heldAlerts(this.#db, ownerId);
+    if (held.length === 0) return;
+    const settings = getSettings(this.#db, ownerId);
+    const { due, kept } = heldDue(settings, held, now);
+    if (kept.length === held.length) return;
+    setHeldAlerts(this.#db, ownerId, kept);
+    if (due.length === 0 || !settings.notificationsEnabled) return;
+    try {
+      await this.#notifier.notify({ ...heldSummary(due), url: `${this.#baseUrl}/#/` });
+      this.#heldTries = 0;
+    } catch (err) {
+      console.error("Couldn't show what was held:", err);
+      if (++this.#heldTries < HELD_TRIES) setHeldAlerts(this.#db, ownerId, [...due, ...heldAlerts(this.#db, ownerId)]);
+      else this.#heldTries = 0;
+    }
+  }
+
+  async #announce(ownerId: string, kind: AlertKind | null, notice: { title: string; body: string; alarm?: true }, page = "#/") {
+    if (!this.#shouldSay(ownerId, kind, notice.title)) return;
     try {
       await this.#notifier.notify({ ...notice, url: `${this.#baseUrl}/${page}` });
       console.log(`Notified: ${notice.title}`);
@@ -693,8 +739,8 @@ export class Watcher {
     }
   }
 
-  async #notify(app: App, notice: { title: string; body: string }, tab?: string) {
-    if (!getSettings(this.#db, app.ownerId).notificationsEnabled) return;
+  async #notify(app: App, kind: AlertKind, notice: { title: string; body: string }, tab?: string) {
+    if (!this.#shouldSay(app.ownerId, kind, notice.title, app.id)) return;
     try {
       await this.#notifier.notify({ ...notice, url: `${this.#baseUrl}/#/apps/${encodeURIComponent(app.slug)}${tab ? `/${tab}` : ""}` });
       console.log(`Notified: ${notice.title}`);

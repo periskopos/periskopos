@@ -16,6 +16,12 @@ import { ago } from "./format.ts";
 
 let built: HTMLElement | null | undefined;
 
+// Settings shows the same thing. A watcher returning false is finished with.
+let latest: UpdateSnapshot | undefined;
+const watchers = new Set<(snapshot: UpdateSnapshot) => boolean>();
+export const currentUpdate = () => latest;
+export const watchUpdates = (watcher: (snapshot: UpdateSnapshot) => boolean) => void watchers.add(watcher);
+
 export function updateButton(): HTMLElement | null {
   if (built === undefined) built = buildUpdateButton(desktopBridge());
   return built;
@@ -88,7 +94,9 @@ export function buildUpdateButton(bridge: DesktopBridge | null): HTMLElement | n
     const next = parseSnapshot(raw);
     if (!next) return;
     snapshot = next;
+    latest = next;
     draw();
+    for (const watcher of watchers) if (!watcher(next)) watchers.delete(watcher);
   });
   return root;
 }

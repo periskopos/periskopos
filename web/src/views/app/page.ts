@@ -2,6 +2,7 @@ import type {
   ActionDef,
   ActivityEntry,
   App,
+  AppPause,
   ConfigReport,
   AppHistory,
   AppStatus,
@@ -40,6 +41,9 @@ export type AppPage = {
 
   app?: App;
   status?: AppStatus;
+  pause?: AppPause;
+  // Bumped when a pause is set or ended here, so an answer that left before that can't undo it.
+  pauseEdits: number;
   hist?: AppHistory;
   services: ServiceView[];
   // What each connection shows of itself (deploys, commits, traffic, search), by
@@ -63,6 +67,7 @@ export type AppPage = {
   gapsOpen: boolean;
 
   draw(): void;
+  drawPause(): void; // the pause banner, drawn even while a form is being edited
   // After a form is sent: stop holding redraws back, and load again.
   afterSubmit(): Promise<boolean>;
   openAction(action: ActionDef): void;

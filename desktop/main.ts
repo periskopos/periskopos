@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, safeStorage, session, shell } from "electron";
+import { readShellPrefs, sanitizeShellPrefs, writeShellPrefs } from "./shell-prefs.ts";
 import type { IpcMainEvent } from "electron";
 import type { ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -25,6 +26,10 @@ import {
   IPC_LOGIN_ITEM_GET,
   IPC_LOGIN_ITEM_SET,
   IPC_LOGIN_ITEM_STATE,
+  IPC_OPEN_DATA,
+  IPC_SHELL_PREFS_GET,
+  IPC_SHELL_PREFS_SET,
+  IPC_SHELL_PREFS_STATE,
   IPC_UPDATE_GET,
   IPC_UPDATE_STATE,
   IPC_WINDOW_CLOSE,
@@ -107,6 +112,9 @@ if (process.env.PERISKOPOS_THEME === "light" || process.env.PERISKOPOS_THEME ===
 // Before the single-instance lock below, which is tied to this folder.
 if (!isPackaged) app.setPath("userData", devUserData(app.getPath("appData")));
 const userData = () => app.getPath("userData");
+let shellPrefs = readShellPrefs(userData());
+const themeForced = process.env.PERISKOPOS_THEME === "light" || process.env.PERISKOPOS_THEME === "dark";
+if (!themeForced) nativeTheme.themeSource = shellPrefs.theme;
 const PORT = portFor(isPackaged);
 const ORIGIN = originFor(PORT);
 
@@ -176,7 +184,7 @@ function showWindow(route?: string): void {
       userData: userData(),
       icon: iconFor("window", isPackaged, resources()),
       colors: readChromeColors(userData(), nativeTheme.shouldUseDarkColors),
-      canHideToTray: hasTray,
+      canHideToTray: () => hasTray() && shellPrefs.onClose === "tray",
       isQuitting: () => quitting,
       onHideToTray: hintTray,
     });
@@ -257,6 +265,14 @@ function registerPageHandlers(): void {
     const dir = backupsDir(dataPaths(isPackaged, userData()).dataDir);
     mkdirSync(dir, { recursive: true });
     void shell.openPath(dir);
+  });
+  onPage(IPC_OPEN_DATA, () => void shell.openPath(dataPaths(isPackaged, userData()).dataDir));
+  onPage(IPC_SHELL_PREFS_GET, (event) => event.sender.send(IPC_SHELL_PREFS_STATE, shellPrefs));
+  onPage(IPC_SHELL_PREFS_SET, (event, given) => {
+    shellPrefs = sanitizeShellPrefs(given);
+    if (!themeForced) nativeTheme.themeSource = shellPrefs.theme;
+    if (!writeShellPrefs(userData(), shellPrefs)) logLine("couldn't save the app's preferences");
+    event.sender.send(IPC_SHELL_PREFS_STATE, shellPrefs);
   });
   onPage(IPC_WINDOW_HARD_RELOAD, () => mainWindow?.webContents.reloadIgnoringCache());
   onPage(IPC_WINDOW_MINIMIZE, () => mainWindow?.minimize());
@@ -622,7 +638,8 @@ if (!app.requestSingleInstanceLock()) {
     // built) a closed window would leave an invisible app with its server
     // running and no way back, so that quits. A Mac keeps its dock icon.
     // Before boot is done the only window is the splash, and fail() quits.
-    if (booted && process.platform !== "darwin" && !hasTray()) app.quit();
+    // Nor when I've asked for closing the window to quit.
+    if (booted && process.platform !== "darwin" && (!hasTray() || shellPrefs.onClose === "quit")) app.quit();
   });
   app.on("activate", () => {
     if (!mainWindow) showWindow();

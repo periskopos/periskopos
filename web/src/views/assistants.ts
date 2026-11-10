@@ -1,8 +1,9 @@
 import type { ActionDef, AgentAccess, AgentAuditEntry, AgentRule, AgentView, App, McpStatus, Settings } from "../../../shared/types.ts";
 import { api } from "../api.ts";
-import { h } from "../dom.ts";
+import { h, mount } from "../dom.ts";
 import { clock } from "../format.ts";
-import { busyButton, checkbox, empty, errorBox, field, lamp, section, submitting, timeAgo, toast } from "../ui.ts";
+import { toggleRow } from "../settingRows.ts";
+import { busyButton, empty, errorBox, field, lamp, section, submitting, timeAgo, toast } from "../ui.ts";
 import type { LampState } from "../ui.ts";
 import { codeBlock, copyButton } from "./protocolParts.ts";
 
@@ -135,9 +136,10 @@ export function assistantsSections() {
     const fact = (label: string, ...value: unknown[]) => h("div", { class: "fact" }, h("dt", null, label), h("dd", null, ...(value as Node[])));
     const ok = (text: string) => h("span", { class: "key-line" }, lamp("up"), text);
     const bad = (...text: unknown[]) => h("span", { class: "key-line" }, lamp("down"), ...(text as Node[]));
-    strip.replaceChildren(
+    mount(
+      strip,
       h("p", { class: "key-line connection-line" }, lamp(top.lamp), top.text),
-      checkbox(
+      toggleRow(
         "agentAccess",
         "Let AI assistants use Periskopos",
         "Claude, Cursor, VS Code or any tool that speaks MCP can read your apps and ask to run their actions, as each assistant's limits below allow. While off, none can see anything, and whatever they're waiting on is withdrawn. The tray's Cut off AI assistants turns this off at once.",

@@ -85,6 +85,11 @@ export function createUser(db: DatabaseSync, name: string): User {
   return user;
 }
 
+export function renameUser(db: DatabaseSync, user: User, name: string): User {
+  db.prepare("UPDATE users SET name = ? WHERE id = ?").run(name, user.id);
+  return { ...user, name };
+}
+
 // ── Apps ────────────────────────────────────────────────────────────────
 
 function connectionsOf(db: DatabaseSync, appIds: string[]): Map<string, Connection[]> {
@@ -145,7 +150,7 @@ function freeSlug(db: DatabaseSync, ownerId: string, base: string): string {
   return slug;
 }
 
-export type NewApp = { name: string; url: string; notes?: string; live?: boolean };
+export type NewApp = { name: string; url: string; notes?: string; live?: boolean; checkIntervalMin?: number };
 
 // A new app gets a `site` check for its URL straight away (FR-A1).
 export function createApp(db: DatabaseSync, ownerId: string, input: NewApp): App {
@@ -153,9 +158,9 @@ export function createApp(db: DatabaseSync, ownerId: string, input: NewApp): App
   const slug = freeSlug(db, ownerId, slugify(input.name));
   transaction(db, () => {
     db.prepare(
-      `INSERT INTO apps (id, owner_id, slug, name, url, notes, live, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(id, ownerId, slug, input.name, input.url, input.notes ?? null, input.live === false ? 0 : 1, now());
+      `INSERT INTO apps (id, owner_id, slug, name, url, notes, live, check_interval_min, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, ownerId, slug, input.name, input.url, input.notes ?? null, input.live === false ? 0 : 1, input.checkIntervalMin ?? 5, now());
     for (const check of keylessChecks(input.url)) insertConnection(db, id, check);
   });
   return getApp(db, ownerId, slug)!;
@@ -164,6 +169,11 @@ export function createApp(db: DatabaseSync, ownerId: string, input: NewApp): App
 export type AppPatch = { name?: string; url?: string; notes?: string | null; live?: boolean; checkIntervalMin?: number };
 
 export const CHECK_INTERVALS_MIN = [1, 2, 5, 10, 15, 30, 60];
+
+// Every app of mine at one interval; how many there are.
+export function setAllCheckIntervals(db: DatabaseSync, ownerId: string, minutes: number): number {
+  return Number(db.prepare("UPDATE apps SET check_interval_min = ? WHERE owner_id = ?").run(minutes, ownerId).changes);
+}
 
 export function updateApp(db: DatabaseSync, app: App, patch: AppPatch): App {
   transaction(db, () => {

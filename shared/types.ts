@@ -277,6 +277,13 @@ export type DeployState = {
   detail?: string;
 };
 
+// The watcher's log, for its panel and its vans: what it checked lately, newest first.
+export type WatcherLog = {
+  off: boolean; // turned off in Settings
+  stoppedSince?: string;
+  checks: { at: string; state: CheckState; slug: string; app: string; what: string; ms?: number; httpStatus?: number; detail?: string }[];
+};
+
 export type AppStatus = {
   slug: string;
   state: AppState;
@@ -585,6 +592,9 @@ export type DayStat = {
   maxMs?: number;
 };
 
+// One day of an app's strip on the Apps page: the uptime of a DayStat, no more.
+export type UptimeDay = Pick<DayStat, "day" | "uptimePct" | "watchedMin" | "incidents">;
+
 export type AppHistory = {
   from: string;
   to: string;
@@ -592,14 +602,31 @@ export type AppHistory = {
   watchedMin: number;
   incidents: Incident[]; // newest first
   gaps: Gap[]; // newest first
+  watched: Gap[]; // oldest first: the stretches that can say how this app was, and nothing else can
   days: DayStat[]; // oldest first
 };
 
+export type AlertKind = "outages" | "deploys" | "accounts" | "providers" | "warnings";
+// An alert a pause held back, until it ends.
+// `kind` is what it was when held: switched off since, it isn't sent.
+export type HeldAlert = { title: string; appId?: string; kind?: AlertKind };
+
 export type Settings = {
   watcherEnabled: boolean;
+  defaultCheckIntervalMin: number; // what a new app is checked at
+  checksKeptDays: number; // how long every check is kept (a choice in shared/settings-choices.ts)
   notificationsEnabled: boolean;
   // A provider's incident in a part my apps use sounds an alarm until dismissed.
   incidentAlarm: boolean;
+  // Which kinds of alert I want (server/alerts/rules.ts). Under Notify me.
+  alertOutages: boolean;
+  alertDeploys: boolean;
+  alertAccounts: boolean;
+  alertProviders: boolean;
+  alertWarnings: boolean;
+  // Pauses: when each ends, as an ISO time. "" is no pause.
+  alertsPausedUntil: string;
+  appPauses: Record<string, string>; // app id → when its pause ends
   // Claude (or any MCP client) may use Periskopos through the agent token.
   agentAccess: boolean;
   // Phone alerts: where the same notifications also go (keys in the keys file).
@@ -625,4 +652,18 @@ export type StartupStatus = {
   supported: boolean;
   enabled: boolean;
   managedBy?: "desktop"; // the desktop app owns it: change it from the tray icon
+};
+
+// When this app's alerts are paused until, and all alerts: only what's running.
+export type AppPause = { app?: string; all?: string };
+
+// What importing a setup file would do (Settings → Data → Import).
+export type SetupPlanView = {
+  exportedAt?: string;
+  version?: string;
+  newApps: { name: string; url: string; connections: string[]; waiting: string[]; unread: string[]; endpoint: boolean }[];
+  existing: { name: string; connections: string[]; waiting: string[] }[];
+  refused: { name: string; why: string }[];
+  accounts: { type: string; label: string; name: string }[];
+  settings: { key: string; label: string; from: boolean | number; to: boolean | number }[];
 };

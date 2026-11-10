@@ -2,7 +2,7 @@ import type { SearchDay, SearchDetails, SearchQuery, SearchTotals } from "../../
 import { h } from "../../dom.ts";
 import { empty, ext, figure, lamp, section } from "../../ui.ts";
 import { detailsError } from "./details.ts";
-import { compactCount, svg } from "./traffic.ts";
+import { compactCount, timeChart } from "./chart.ts";
 
 // ── Search: how a site does in search results ───────────────────────────
 
@@ -30,37 +30,48 @@ function searchFigures(t: SearchTotals, before: SearchTotals | undefined, range:
   );
 }
 
-// Clicks per day as plain bars from a zero baseline, like the traffic chart.
+// Which measure the chart shows, kept while the period changes.
+let chartMetric = "clicks";
+
 function clicksChart(days: SearchDay[], range: SearchRange) {
-  const W = 600;
-  const H = 100;
-  const GAP = 2;
-  const max = Math.max(0, ...days.map((d) => d.clicks));
-  const barW = (W - GAP * (days.length - 1)) / days.length;
-  const tip = (d: SearchDay) =>
-    `${dayLabel(d.date)} · ${d.clicks.toLocaleString()} clicks · ${d.impressions.toLocaleString()} impressions${d.position !== undefined ? ` · position ${d.position}` : ""}`;
-  return h(
-    "div",
-    { class: "tchart-wrap" },
-    h("div", { class: "tchart-head meta" }, h("span", null, "Clicks per day"), h("span", { class: "mono" }, `best ${compactCount(max)}`)),
-    svg(
-      "svg",
-      { class: "tchart", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", role: "img", "aria-label": `Search clicks per day, last ${RANGE_LABEL[range]}; best ${compactCount(max)}` },
-      ...days.map((d, i) => {
-        const x = i * (barW + GAP);
-        const height = max > 0 ? Math.max(d.clicks > 0 ? 2 : 0, (d.clicks / max) * H) : 0;
-        return svg(
-          "g",
-          { class: "tchart-col", tabindex: 0, "aria-label": tip(d) },
-          svg("title", {}, tip(d)),
-          svg("rect", { class: "tchart-hit", x, y: 0, width: barW, height: H }),
-          svg("rect", { class: "tchart-bar", x, y: H - height, width: barW, height, rx: 1.5 }),
-        );
-      }),
-      svg("rect", { class: "tchart-base", x: 0, y: H - 1, width: W, height: 1 }),
+  return timeChart({
+    metric: chartMetric,
+    onMetric: (key) => {
+      chartMetric = key;
+    },
+    metrics: [
+      { key: "clicks", label: "Clicks", title: "Clicks per day", peak: "best", unit: "clicks" },
+      { key: "impressions", label: "Impressions", title: "Impressions per day", peak: "best", unit: "impressions" },
+    ],
+    points: days.map((d) => ({
+      label: dayLabel(d.date),
+      axis: dayLabel(d.date),
+      values: { clicks: d.clicks, impressions: d.impressions },
+      rows: [
+        ["Clicks", d.clicks.toLocaleString()],
+        ["Impressions", d.impressions.toLocaleString()],
+        ...(d.position !== undefined ? ([["Position", String(d.position)]] as [string, string][]) : []),
+      ],
+    })),
+    describe: `Search per day, last ${RANGE_LABEL[range]}`,
+    table: h(
+      "details",
+      { class: "tchart-table" },
+      h("summary", { class: "meta" }, "Show the numbers"),
+      h(
+        "table",
+        null,
+        h("thead", null, h("tr", null, h("th", null, "Day (UTC)"), h("th", null, "Clicks"), h("th", null, "Impressions"), h("th", null, "Position"))),
+        h(
+          "tbody",
+          null,
+          [...days].reverse().map((d) =>
+            h("tr", null, h("td", null, dayLabel(d.date)), h("td", { class: "num" }, d.clicks.toLocaleString()), h("td", { class: "num" }, d.impressions.toLocaleString()), h("td", { class: "num" }, d.position !== undefined ? String(d.position) : "—")),
+          ),
+        ),
+      ),
     ),
-    h("div", { class: "bars-axis meta" }, h("span", null, days[0] ? dayLabel(days[0].date) : ""), h("span", null, days.at(-1) ? dayLabel(days.at(-1)!.date) : "")),
-  );
+  });
 }
 
 function queriesList(queries: SearchQuery[]) {

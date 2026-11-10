@@ -2,7 +2,8 @@ import type { BackupStatus } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { desktopBridge } from "../desktop.ts";
 import { h } from "../dom.ts";
-import { busyButton, errorBox, lamp, section, timeAgo, toast } from "../ui.ts";
+import { settingRow } from "../settingRows.ts";
+import { busyButton, errorBox, ext, lamp, section, timeAgo, toast } from "../ui.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -19,35 +20,31 @@ export function backupsSection(status: BackupStatus, onChange: (status: BackupSt
   const bridge = desktopBridge();
   return section("Backups", {
     body: [
-      h(
-        "p",
-        { class: "key-line" },
-        lamp(status.error ? "down" : !last ? "none" : stale ? "attention" : "up"),
-        last
-          ? [h("span", null, "Last backup ", timeAgo(last.at)), h("span", { class: "meta" }, ` · ${size(last.bytes)} · ${status.count} kept`)]
-          : "No backup yet: the first is made when Periskopos starts.",
+      settingRow(
+        h("span", { class: "key-line" }, lamp(status.error ? "down" : !last ? "none" : stale ? "attention" : "up"), last ? h("span", null, "Last backup ", timeAgo(last.at)) : "No backup yet"),
+        last ? `${size(last.bytes)} · ${status.count} kept` : "The first is made when Periskopos starts.",
+        [
+          busyButton("Back up now", "Backing up…", async () => {
+            try {
+              const { backups } = await api<{ backups: BackupStatus }>("POST", "/settings/backup");
+              toast("Backed up");
+              onChange(backups);
+            } catch (err) {
+              slot.replaceChildren(errorBox(err));
+            }
+          }),
+          bridge?.openBackups && h("button", { type: "button", class: "btn", onclick: () => bridge.openBackups?.() }, "Open the backups folder"),
+        ],
       ),
       status.error && h("p", { class: "meta", role: "alert" }, `The last automatic backup failed: ${status.error}`),
       h(
         "p",
         { class: "meta" },
-        `A copy of your apps, connections, accounts, settings and history, made once a day; the last ${status.keep} are kept. Your keys are never in it: they stay only in the keys file. To restore a backup, see Backups in the docs (periskopos.com/docs/app/backups).`,
+        `A copy of your apps, connections, accounts, settings and history, made once a day; the last ${status.keep} are kept. Your keys are never in it: they stay only in the keys file. To restore a backup, see `,
+        ext("https://periskopos.com/docs/app/backups", "Backups in the docs"),
+        ".",
       ),
       h("p", { class: "mono meta backups-dir" }, status.dir),
-      h(
-        "div",
-        { class: "actions" },
-        busyButton("Back up now", "Backing up…", async () => {
-          try {
-            const { backups } = await api<{ backups: BackupStatus }>("POST", "/settings/backup");
-            toast("Backed up");
-            onChange(backups);
-          } catch (err) {
-            slot.replaceChildren(errorBox(err));
-          }
-        }),
-        bridge?.openBackups && h("button", { type: "button", class: "btn", onclick: () => bridge.openBackups?.() }, "Open the backups folder"),
-      ),
       slot,
     ],
   });

@@ -57,6 +57,7 @@ the one who keeps watch all around. It was called Ground Control until
 | **Configuration checks** | Missing security headers, unsafe DNS, branch protection, Supabase row level security, Cloudflare SSL settings and more, each with why it matters and exactly how to fix it. |
 | **Errors and logs** | Recent runtime errors from your host's logs and unresolved issues from Sentry, with an alert when errors spike. |
 | **Traffic, search and revenue** | Cloudflare analytics, Google Search Console, Google Analytics, Stripe and Paddle, on each app's overview. |
+| **The World** | Your own Silicon Valley, drawn from your real data: a campus for each app, the services they rely on behind them, and the watcher's dish on a hill. Lights only when the state is known, smoke when one's down, fog when it isn't known, real checks and deploys on the road, a key that takes you to what needs a look, and a slider to replay the last 24 hours. It grows as your apps do. |
 | **Notifications** | On the desktop and on your phone (ntfy, Telegram or email), only when something actually changes. |
 | **Actions with a confirmation** | Redeploy, purge cache, or your app's own buttons, every run recorded with who started it. |
 | **AI assistants (MCP)** | Claude, Cursor, VS Code and others can ask "is my last push live?" or "why is CI failing?", and can only *ask* to run an action: you approve each one. |
@@ -168,6 +169,7 @@ The docs for using Periskopos are at **[periskopos.com/docs](https://periskopos.
 |---|---|
 | [Getting started](https://periskopos.com/docs/getting-started/) | Install, add an app, connect an account |
 | [Watching your apps](https://periskopos.com/docs/guide/apps/) | Checks, configuration, runtime errors, status pages, notifications |
+| [The World](https://periskopos.com/docs/guide/world/) | Your apps as a valley, and how to read it |
 | [Providers](https://periskopos.com/docs/accounts/providers/) | Each account's key and what it watches |
 | [AI assistants](https://periskopos.com/docs/assistants/connect/) | Connecting an assistant and setting its limits |
 | [Security model](https://periskopos.com/docs/assistants/security/) | What assistants can and can't do, and why |
@@ -179,6 +181,7 @@ For working on Periskopos itself, this repository keeps:
 | | |
 |---|---|
 | [Agent safety](docs/AGENT-SAFETY.md) | The security design record, cited throughout the code |
+| [Design](docs/DESIGN.md) | The design system: its rules, tokens and components |
 | [Releasing](docs/RELEASING.md) | For maintainers |
 
 Star-Map, Moon-Base and the other apps in the examples, tests and screenshots are made up.

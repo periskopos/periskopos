@@ -2,7 +2,10 @@ import type { TrafficPoint, TrafficTotals, TrafficDetails } from "../../../../sh
 import { h } from "../../dom.ts";
 import { clock } from "../../format.ts";
 import { empty, ext, figure, lamp, section } from "../../ui.ts";
+import { compactCount, timeChart } from "./chart.ts";
 import { detailsError } from "./details.ts";
+
+export { compactCount };
 
 // ── Traffic: a Cloudflare domain's requests and visitors ────────────────
 
@@ -11,13 +14,6 @@ const RANGE_LABEL: Record<TrafficRange, string> = { day: "24 h", week: "7 days",
 // At or above this share of 5xx answers the error figure is flagged (the
 // same threshold the check alerts on).
 const ERROR_FLAG_PCT = 5;
-
-// "980", "1.2k", "34k", "1.5M"
-export function compactCount(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) return `${Number((n / 1000).toFixed(n < 10_000 ? 1 : 0))}k`;
-  return `${Number((n / 1_000_000).toFixed(1))}M`;
-}
 
 export function formatBytes(n: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -34,56 +30,39 @@ const dayFmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeri
 // Cloudflare counts days in UTC; hours are shown on this PC's clock.
 const pointLabel = (p: TrafficPoint, range: TrafficRange) => (range === "day" ? clock(p.at) : dayFmt.format(new Date(`${p.at}T00:00:00Z`)));
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-// The SVG twin of h(): attributes and text only, never markup.
-export function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>, ...children: (Node | string)[]): SVGElementTagNameMap[K] {
-  const el = document.createElementNS(SVG_NS, tag);
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
-  for (const c of children) el.append(typeof c === "string" ? document.createTextNode(c) : c);
-  return el;
-}
+// Which measure the chart shows, kept while the period changes.
+let chartMetric = "requests";
 
-// Requests per hour or day as plain bars from a zero baseline: one series,
-// one colour, the numbers in each bar's tooltip and in the table below.
+// Requests or visitors per hour or day. The current hour or day is still counting, so
+// its stretch of line is dashed: a drop there isn't a drop yet.
 function requestsChart(points: TrafficPoint[], range: TrafficRange) {
-  const W = 600;
-  const H = 100;
-  const GAP = 2;
-  const max = Math.max(0, ...points.map((p) => p.requests));
-  const barW = (W - GAP * (points.length - 1)) / points.length;
   const per = range === "day" ? "hour" : "day";
-  const tip = (p: TrafficPoint) =>
-    `${pointLabel(p, range)} · ${p.requests.toLocaleString()} requests · ${p.visitors.toLocaleString()} visitors${p.errors5xx ? ` · ${p.errors5xx.toLocaleString()} failed (5xx)` : ""}`;
-  const chart = svg(
-    "svg",
-    {
-      class: "tchart",
-      viewBox: `0 0 ${W} ${H}`,
-      preserveAspectRatio: "none",
-      role: "img",
-      "aria-label": `Requests per ${per}, last ${RANGE_LABEL[range]}; busiest ${compactCount(max)}`,
+  return timeChart({
+    metric: chartMetric,
+    onMetric: (key) => {
+      chartMetric = key;
     },
-    ...points.map((p, i) => {
-      const x = i * (barW + GAP);
-      // A period with any traffic stays visible next to a much busier one.
-      const height = max > 0 ? Math.max(p.requests > 0 ? 2 : 0, (p.requests / max) * H) : 0;
-      return svg(
-        "g",
-        { class: "tchart-col", tabindex: 0, "aria-label": tip(p) },
-        svg("title", {}, tip(p)),
-        svg("rect", { class: "tchart-hit", x, y: 0, width: barW, height: H }),
-        svg("rect", { class: "tchart-bar", x, y: H - height, width: barW, height, rx: 1.5 }),
-      );
-    }),
-    svg("rect", { class: "tchart-base", x: 0, y: H - 1, width: W, height: 1 }),
-  );
-  return h(
-    "div",
-    { class: "tchart-wrap" },
-    h("div", { class: "tchart-head meta" }, h("span", null, `Requests per ${per}`), h("span", { class: "mono" }, `busiest ${compactCount(max)}`)),
-    chart,
-    h("div", { class: "bars-axis meta" }, h("span", null, points[0] ? pointLabel(points[0], range) : ""), h("span", null, range === "day" ? "now" : "today")),
-    h(
+    metrics: [
+      { key: "requests", label: "Requests", title: `Requests per ${per}`, peak: "busiest", unit: "requests" },
+      { key: "visitors", label: "Visitors", title: `Visitors per ${per}`, peak: "busiest", unit: "visitors" },
+    ],
+    points: points.map((p) => ({
+      label: pointLabel(p, range),
+      axis: pointLabel(p, range),
+      values: { requests: p.requests, visitors: p.visitors },
+      flag: p.requests > 0 && (p.errors5xx / p.requests) * 100 >= ERROR_FLAG_PCT,
+      rows: [
+        ["Requests", p.requests.toLocaleString()],
+        ["Visitors", p.visitors.toLocaleString()],
+        ["Cached", p.requests ? `${Math.round((p.cachedRequests / p.requests) * 100)}%` : "—"],
+        ["Failed (5xx)", p.errors5xx.toLocaleString()],
+      ],
+    })),
+    partial: true,
+    lastAxis: range === "day" ? "now" : "today",
+    flagNote: `A ${per} with ${ERROR_FLAG_PCT}% or more of its requests failing (5xx)`,
+    describe: `Traffic per ${per}, last ${RANGE_LABEL[range]}`,
+    table: h(
       "details",
       { class: "tchart-table" },
       h("summary", { class: "meta" }, "Show the numbers"),
@@ -108,7 +87,7 @@ function requestsChart(points: TrafficPoint[], range: TrafficRange) {
         ),
       ),
     ),
-  );
+  });
 }
 
 function trafficFigures(t: TrafficTotals, range: TrafficRange) {

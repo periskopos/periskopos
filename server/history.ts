@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import type { AppHistory, CheckResult, CheckState, DayStat, DetailsLink, Gap, Incident, IncidentKind } from "../shared/types.ts";
+import type { AppHistory, CheckResult, CheckState, DayStat, DetailsLink, Gap, Incident, IncidentKind, UptimeDay } from "../shared/types.ts";
 import { clip, complement, intersect, total } from "./intervals.ts";
 import type { Interval } from "./intervals.ts";
 
@@ -73,6 +73,17 @@ export function recordCheck(db: DatabaseSync, appId: string, connectionId: strin
     `INSERT INTO checks (app_id, connection_id, at, state, ms, http_status, detail, summary, link)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(appId, connectionId, r.at, r.state, r.ms ?? null, r.httpStatus ?? null, r.detail ?? null, r.summary ?? null, r.link ? JSON.stringify(r.link) : null);
+}
+
+// The watcher's own log: its latest checks across these apps, newest first. Read app
+// by app on the index, so it stays quick however long the record has grown.
+export function recentChecks(db: DatabaseSync, appIds: string[], limit = 60): (CheckResult & { appId: string; connectionId: string })[] {
+  const read = db.prepare("SELECT * FROM checks WHERE app_id = ? ORDER BY at DESC, id DESC LIMIT ?");
+  return appIds
+    .flatMap((appId) => (read.all(appId, limit) as (CheckRow & { id: number })[]).map((r) => ({ id: r.id, appId, connectionId: r.connection_id, ...toResult(r) })))
+    .sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)
+    .slice(0, limit)
+    .map(({ id: _id, ...rest }) => rest);
 }
 
 export function latestCheck(db: DatabaseSync, connectionId: string): CheckResult | undefined {
@@ -200,7 +211,7 @@ export function endedSince(db: DatabaseSync, appIds: string[], since: number, li
   if (appIds.length === 0) return [];
   const rows = db
     .prepare(
-      `SELECT * FROM incidents WHERE ended_at IS NOT NULL AND ended_at >= ?
+      `SELECT * FROM incidents WHERE ended_at IS NOT NULL AND ended_at >= ? AND false_alarm = 0
        AND app_id IN (${appIds.map(() => "?").join(",")})
        ORDER BY ended_at DESC LIMIT ?`,
     )
@@ -292,14 +303,9 @@ export function dayKey(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function dayStat(db: DatabaseSync, appId: string, start: number, now: number, watched: Interval[], incidents: Incident[]): DayStat {
+function dayUptime(start: number, now: number, watched: Interval[], incidents: Incident[]): UptimeDay {
   const end = Math.min(nextLocalDay(start), now);
   const { watchedMs, uptimePct } = measure(watched, incidents, start, end, now);
-  const ms = db
-    .prepare(
-      "SELECT AVG(ms) AS avg, MAX(ms) AS max FROM checks WHERE app_id = ? AND at >= ? AND at < ? AND ms IS NOT NULL",
-    )
-    .get(appId, iso(start), iso(end)) as { avg: number | null; max: number | null };
   return {
     day: dayKey(start),
     ...(uptimePct !== undefined ? { uptimePct } : {}),
@@ -309,9 +315,31 @@ function dayStat(db: DatabaseSync, appId: string, start: number, now: number, wa
       const t = Date.parse(i.startedAt);
       return t >= start && t < end;
     }).length,
+  };
+}
+
+function dayStat(db: DatabaseSync, appId: string, start: number, now: number, watched: Interval[], incidents: Incident[]): DayStat {
+  const end = Math.min(nextLocalDay(start), now);
+  const ms = db
+    .prepare(
+      "SELECT AVG(ms) AS avg, MAX(ms) AS max FROM checks WHERE app_id = ? AND at >= ? AND at < ? AND ms IS NOT NULL",
+    )
+    .get(appId, iso(start), iso(end)) as { avg: number | null; max: number | null };
+  return {
+    ...dayUptime(start, now, watched, incidents),
     ...(ms.avg !== null ? { avgMs: Math.round(ms.avg) } : {}),
     ...(ms.max !== null ? { maxMs: ms.max } : {}),
   };
+}
+
+// The Apps page's strip: the same days as the history, just their uptime.
+export function uptimeDays(db: DatabaseSync, appId: string, now = Date.now(), days = 30): UptimeDay[] {
+  const firstDay = localDaysBefore(now, days - 1);
+  const watched = watchedForApp(db, appId, watchedIntervals(db, firstDay, now, now), firstDay, now, now);
+  const incidents = incidentsBetween(db, appId, firstDay, now);
+  const out: UptimeDay[] = [];
+  for (let d = firstDay; d < now; d = nextLocalDay(d)) out.push(dayUptime(d, now, watched, incidents));
+  return out;
 }
 
 // The app page's history: the last `days` days, in detail.
@@ -344,6 +372,7 @@ export function appHistory(db: DatabaseSync, appId: string, now = Date.now(), da
     watchedMin: Math.round(watchedMs / 60_000),
     incidents,
     gaps,
+    watched: watched.map(([a, b]) => ({ from: iso(a), to: iso(b) })),
     days: dayStats,
   };
 }
@@ -374,8 +403,8 @@ export function rollUp(db: DatabaseSync, now = Date.now()) {
   }
 }
 
-export function prune(db: DatabaseSync, now = Date.now()) {
-  db.prepare("DELETE FROM checks WHERE at < ?").run(iso(localDaysBefore(now, CHECKS_KEPT_DAYS)));
+export function prune(db: DatabaseSync, now = Date.now(), checksKeptDays = CHECKS_KEPT_DAYS) {
+  db.prepare("DELETE FROM checks WHERE at < ?").run(iso(localDaysBefore(now, checksKeptDays)));
   const yearAgo = now - SUMMARIES_KEPT_DAYS * DAY_MS;
   db.prepare("DELETE FROM daily_summaries WHERE day < ?").run(dayKey(yearAgo));
   db.prepare("DELETE FROM watch_periods WHERE last_seen_at < ?").run(iso(yearAgo));

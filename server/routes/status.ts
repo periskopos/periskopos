@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { App, AppStatus } from "../../shared/types.ts";
+import { connectionLabel } from "../../shared/catalog.ts";
+import type { App, AppStatus, WatcherLog } from "../../shared/types.ts";
 import { deployState } from "../deploys.ts";
 import * as history from "../history.ts";
 import { protocolMetrics } from "../protocol.ts";
@@ -25,6 +26,13 @@ export function statusRoutes({ db, watcher }: RouteDeps) {
     return c.json({ statuses });
   });
 
+  // Each live app's last 30 days, for the strips on the Apps page. A not-live
+  // app has no uptime to speak of, so it isn't here.
+  r.get("/status/days", (c) => {
+    const apps = visible(c, store.listApps(db, c.var.user.id)).filter((a) => a.live);
+    return c.json({ days: Object.fromEntries(apps.map((a) => [a.slug, history.uptimeDays(db, a.id)])) });
+  });
+
   r.get("/apps/:slug/status", async (c) => {
     const [status] = await statusOf(db, watcher, [findApp(db, c)], c.req.query("refresh") === "1");
     return c.json({ status });
@@ -40,10 +48,30 @@ export function statusRoutes({ db, watcher }: RouteDeps) {
       notificationsFor(db, store.listApps(db, c.var.user.id), accounts, Date.now(), {
         off: !settings.watcherEnabled,
         silent: !settings.notificationsEnabled,
+        outagesMuted: settings.notificationsEnabled && !settings.alertOutages,
+        ...(settings.notificationsEnabled ? { paused: { all: settings.alertsPausedUntil, apps: settings.appPauses } } : {}),
         ...(stoppedSince ? { stoppedSince } : {}),
         delivery: deliveryFailures(db, c.var.user.id),
       }),
     );
+  });
+
+  // What the watcher did lately, from its own record.
+  r.get("/watcher/log", (c) => {
+    const apps = visible(c, store.listApps(db, c.var.user.id));
+    const byId = new Map(apps.map((a) => [a.id, a]));
+    const stoppedSince = watcher.stoppedSince;
+    const log: WatcherLog = {
+      off: !getSettings(db, c.var.user.id).watcherEnabled,
+      ...(stoppedSince ? { stoppedSince } : {}),
+      checks: history.recentChecks(db, apps.map((a) => a.id)).flatMap((check) => {
+        const app = byId.get(check.appId)!;
+        const conn = app.connections.find((k) => k.id === check.connectionId);
+        if (!conn) return [];
+        return [{ at: check.at, state: check.state, slug: app.slug, app: app.name, what: connectionLabel(conn), ...(check.ms !== undefined ? { ms: check.ms } : {}), ...(check.httpStatus !== undefined ? { httpStatus: check.httpStatus } : {}), ...(check.detail ? { detail: check.detail } : {}) }];
+      }),
+    };
+    return c.json(log);
   });
 
   // ?refresh=1: read every status page now (the Status page's Check now).

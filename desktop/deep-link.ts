@@ -8,16 +8,17 @@
 //   periskopos://fleet                     -> #/
 //   periskopos://status | services | settings
 //                                              -> #/status | #/services | #/settings
-//   periskopos://settings/<tab>            -> #/settings/<tab> (notifications, assistants, data)
+//   periskopos://settings/<tab>            -> #/settings/<tab> (general, appearance, notifications, assistants, data, about)
 //   periskopos://apps/<slug>[/<tab>]        -> #/apps/<slug>[/<tab>]
 //                                                 (deploys, traffic, actions, history, settings)
 //   periskopos://apps/<slug>/settings/<part> -> #/apps/<slug>/settings/<part> (connections, protocol)
+//   periskopos://world[/<slug>]            -> #/world[/<slug>]
 export const PROTOCOL = "periskopos";
 
 // What slugify() in the server produces: lowercase letters, digits, hyphens.
 const SLUG = /^[a-z0-9-]{1,40}$/;
 const SUBPAGES = new Set(["deploys", "traffic", "actions", "history", "settings"]);
-const SETTINGS_TABS = new Set(["notifications", "assistants", "data"]);
+const SETTINGS_TABS = new Set(["general", "appearance", "notifications", "assistants", "data", "about"]);
 // The parts of an app's Settings (its side menu).
 const SETTINGS_PARTS = new Set(["connections", "protocol"]);
 
@@ -40,6 +41,16 @@ export function parseDeepLink(url: string): string | undefined {
   if ((kind === "apps" || kind === "fleet" || kind === "") && segments.length === 1) return "#/";
   if ((kind === "status" || kind === "services" || kind === "settings") && segments.length === 1) return `#/${kind}`;
   if (kind === "settings" && segments.length === 2) return SETTINGS_TABS.has(slug!) ? `#/settings/${slug}` : undefined;
+  if (kind === "world" && segments.length === 1) return "#/world";
+  if (kind === "world" && segments.length === 2) {
+    let id: string;
+    try {
+      id = decodeURIComponent(slug!);
+    } catch {
+      return undefined;
+    }
+    return SLUG.test(id) ? `#/world/${id}` : undefined;
+  }
   if (kind === "apps" && slug !== undefined) {
     let id: string;
     try {

@@ -66,6 +66,7 @@
   padding: var(--space-4);
   min-width: 0;
   border-left: var(--border-width) solid var(--color-border-subtle);
+  container-type: inline-size;
 }
 .figure:first-child {
   border-left: 0;
@@ -75,7 +76,8 @@
   align-items: center;
   gap: var(--space-2);
   font-family: var(--font-family-mono);
-  font-size: var(--font-size-2xl);
+  /* Shrinks in a narrow tile, so a long figure ("$49,061.20") is never cut off. */
+  font-size: min(var(--font-size-2xl), 16cqi);
   font-weight: var(--font-weight-medium);
   line-height: var(--line-height-tight);
   letter-spacing: -0.02em;
@@ -228,7 +230,7 @@
 .bars {
   display: flex;
   gap: 3px;
-  height: 2.5rem;
+  height: 2.75rem;
   align-items: stretch;
 }
 .bar {
@@ -237,16 +239,17 @@
   min-width: 0;
   padding: 0;
   border: 0;
-  border-radius: 2px;
+  border-radius: 4px;
   background: var(--color-bg-raised);
   cursor: default;
+  transition: transform var(--duration-fast, 120ms) var(--easing-default, ease);
 }
 .bar:not(.bar--up, .bar--warn, .bar--down) {
   box-shadow: inset 0 0 0 1px var(--color-border-default);
 }
 .bar--up {
   background: var(--color-status-up);
-  opacity: 0.85;
+  opacity: 0.8;
 }
 .bar--warn {
   background: var(--color-status-attention);
@@ -254,12 +257,23 @@
 .bar--down {
   background: var(--color-status-down);
 }
-.bar:hover,
+.bar:hover {
+  opacity: 1;
+  transform: scaleY(1.1);
+}
 .bar:focus-visible {
   opacity: 1;
   outline: 2px solid var(--color-text-primary);
   outline-offset: 1px;
   box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+  .bar:hover {
+    transform: none;
+  }
 }
 .bar::after {
   content: attr(data-tip);
@@ -343,39 +357,239 @@
 .tchart-wrap {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--border-radius-md, 8px);
+  background: var(--color-bg-surface);
 }
 .tchart-head {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+.tchart-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.tchart-title {
+  font-weight: var(--font-weight-medium);
+}
+.segmented--sm .segment {
+  padding-block: 2px;
+  font-size: var(--font-size-sm);
+}
+/* The y-axis's labels in a column on the left, the plot beside them, the dates under. */
+.tchart-frame {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  grid-template-rows: 12rem auto;
+  column-gap: var(--space-2);
+  row-gap: var(--space-2);
+}
+.tchart-y {
+  position: relative;
+}
+.tchart-y span {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: var(--font-size-xs, 0.75rem);
+  line-height: 1;
+}
+.tchart-plot {
+  position: relative;
+  min-width: 0;
 }
 .tchart {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
-  height: 7rem;
+  height: 100%;
   overflow: visible;
 }
-/* One series, one colour: the accent, which keeps 3:1 on both surfaces. */
-.tchart-bar {
-  fill: var(--color-accent-primary);
-  opacity: 0.8;
-}
-.tchart-hit {
-  fill: transparent;
+.tchart-grid {
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
 }
 .tchart-base {
-  fill: var(--color-border-strong);
+  stroke: var(--color-border-strong);
+  stroke-width: 1;
+}
+/* One measure, one colour: the accent, which keeps 3:1 on both surfaces. */
+.tchart-fill-top {
+  stop-color: var(--color-accent-primary);
+  stop-opacity: 0.28;
+}
+.tchart-fill-bottom {
+  stop-color: var(--color-accent-primary);
+  stop-opacity: 0.02;
+}
+.tchart-line {
+  fill: none;
+  stroke: var(--color-accent-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tchart-line--partial {
+  stroke-dasharray: 2 5;
+}
+.tchart-cols {
+  position: absolute;
+  inset: 0;
+  display: flex;
 }
 .tchart-col {
+  flex: 1;
+  min-width: 0;
   outline: 2px solid transparent; /* seen in high-contrast mode */
+  outline-offset: -2px;
 }
-.tchart-col:hover .tchart-bar,
-.tchart-col:focus-visible .tchart-bar {
-  opacity: 1;
-  fill: var(--color-accent-primary-hover);
+.tchart-col:focus-visible {
+  outline-color: var(--color-border-focus);
+  border-radius: 2px;
 }
-.tchart-col:focus-visible .tchart-hit {
-  fill: var(--color-bg-raised);
+.tchart-cross {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-text-secondary);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.tchart-dot,
+.tchart-end {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--color-bg-surface); /* a ring, so it stands clear of the line */
+  border-radius: 50%;
+  background: var(--color-accent-primary);
+  box-sizing: content-box;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.tchart-end {
+  width: 7px;
+  height: 7px;
+}
+.tchart-cross[hidden],
+.tchart-dot[hidden],
+.tchart-tip[hidden] {
+  display: none;
+}
+.tchart-flag {
+  position: absolute;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-status-down);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.tchart-flag--key {
+  position: static;
+  display: inline-block;
+  transform: none;
+}
+.tchart-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tchart-tip {
+  position: absolute;
+  top: var(--space-1);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  min-width: 10rem;
+  max-width: 16rem;
+  margin-left: 10px;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-raised);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-sm);
+  pointer-events: none;
+}
+.tchart-tip--left {
+  margin-left: 0;
+  transform: translateX(calc(-100% - 10px));
+}
+.tchart-tip-title {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-text-secondary);
+}
+.tchart-tip-note {
+  font-style: italic;
+}
+.tchart-tip-main {
+  margin-bottom: var(--space-1);
+  color: var(--color-text-secondary);
+}
+.tchart-tip-main strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg, 1.125rem);
+  font-weight: var(--font-weight-medium);
+}
+.tchart-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--color-text-secondary);
+}
+.tchart-tip-row .mono {
+  color: var(--color-text-primary);
+}
+.tchart-none {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.tchart-x {
+  position: relative;
+  grid-column: 2;
+  height: 1.1em;
+}
+.tchart-x span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: var(--font-size-xs, 0.75rem);
+  line-height: 1;
+}
+.tchart-x .is-first {
+  left: 0 !important;
+  transform: none;
+}
+.tchart-x .is-last {
+  right: 0;
+  left: auto !important;
+  transform: none;
+}
+@media (max-width: 480px) {
+  .tchart-wrap {
+    padding: var(--space-3);
+  }
+  .tchart-frame {
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    grid-template-rows: 9.5rem auto;
+  }
 }
 .tchart-table summary {
   cursor: pointer;

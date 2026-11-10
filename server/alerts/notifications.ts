@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ACCOUNTS } from "../../shared/catalog.ts";
-import { KEY_WARN_DAYS, daysLeft } from "../../shared/format.ts";
+import { KEY_WARN_DAYS, daysLeft, duration } from "../../shared/format.ts";
 import type { App, Connection, DeliveryFailure, Incident, NotificationItem, NotificationsView, RecoveredItem, ServiceView } from "../../shared/types.ts";
 import * as history from "../history.ts";
 import { integrations } from "../integrations/index.ts";
@@ -21,7 +21,7 @@ export function notificationsFor(db: DatabaseSync, apps: App[], accounts: Servic
 // failing to get through since a given time; which connections' checks can't
 // currently say; and whether I'd hear about a problem: notifications switched
 // off (silent), or the last ones not reaching me (delivery).
-export type ChecksHealth = { off?: boolean; stoppedSince?: string; silent?: boolean; unreadable?: { connectionId: string; since: string; detail?: string; httpStatus?: number }[]; delivery?: DeliveryFailure[] };
+export type ChecksHealth = { off?: boolean; stoppedSince?: string; silent?: boolean; outagesMuted?: boolean; paused?: { all: string; apps: Record<string, string> }; unreadable?: { connectionId: string; since: string; detail?: string; httpStatus?: number }[]; delivery?: DeliveryFailure[] };
 
 // A check that can't read for a while (a renamed repository, a key that lost
 // a permission) never opens an incident, so left alone it would hide red CI
@@ -56,6 +56,16 @@ export function notificationsView(apps: App[], open: Map<string, Incident>, ende
     }
     if (checks.silent) {
       problems.push({ state: "attention", title: "Periskopos", watching: true, deliberate: true, text: "Notifications are off, so you won't be told when an app goes down", href: "#/settings/notifications" });
+    }
+    if (checks.outagesMuted) {
+      problems.push({ state: "attention", title: "Periskopos", watching: true, deliberate: true, text: "Alerts for apps going down are off, so you won't be told when one does", href: "#/settings/notifications" });
+    }
+    const left = (until: string | undefined) => (until && Date.parse(until) > now ? duration(Date.parse(until) - now) : undefined);
+    const allLeft = left(checks.paused?.all);
+    if (allLeft) problems.push({ state: "attention", title: "Periskopos", watching: true, deliberate: true, text: `Alerts are paused for another ${allLeft}`, href: "#/settings/notifications" });
+    for (const a of apps) {
+      const appLeft = left(checks.paused?.apps[a.id]);
+      if (appLeft) problems.push({ state: "attention", title: "Periskopos", watching: true, deliberate: true, text: `${a.name}'s alerts are paused for another ${appLeft}`, href: "#/settings/notifications" });
     }
   }
   for (const f of checks.delivery ?? []) {

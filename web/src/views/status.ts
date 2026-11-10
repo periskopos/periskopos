@@ -1,3 +1,4 @@
+import { hourStyle } from "../prefs.ts";
 import type { ProviderPart, ProviderPartState, ProviderStatus, User } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { h, mount } from "../dom.ts";
@@ -142,7 +143,7 @@ function card(p: ProviderStatus) {
       figure(
         "Maintenance",
         String(planned.length),
-        planned.length ? (next ? `next ${new Date(next).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}` : "under way") : "none planned",
+        planned.length ? (next ? `next ${new Date(next).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", ...hourStyle() })}` : "under way") : "none planned",
         planned.length === 0,
       ),
     ),

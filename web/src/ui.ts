@@ -3,6 +3,7 @@ import { api, ApiError } from "./api.ts";
 import { h } from "./dom.ts";
 import { buildNotificationsButton } from "./notificationsButton.ts";
 import { updateButton } from "./updateButton.ts";
+import { reportButton } from "./reportButton.ts";
 import { windowControls } from "./windowControls.ts";
 import type { Child } from "./dom.ts";
 import { STATE_LABEL, ago, exactTime } from "./format.ts";
@@ -105,7 +106,7 @@ export function field(label: string, input: HTMLElement, hint?: Child) {
   );
 }
 
-export function checkbox(name: string, label: string, hint: string, checked = false, onchange?: (on: boolean) => void) {
+export function checkbox(name: string, label: string, hint: string, checked = false, onchange?: (on: boolean) => void, disabled = false) {
   return h(
     "label",
     { class: "check" },
@@ -113,6 +114,7 @@ export function checkbox(name: string, label: string, hint: string, checked = fa
       type: "checkbox",
       name,
       checked,
+      disabled,
       ...(onchange ? { onchange: (e: Event) => onchange((e.target as HTMLInputElement).checked) } : {}),
     }),
     h("span", null, h("span", { class: "field-label" }, label), h("span", { class: "field-hint" }, hint)),
@@ -255,6 +257,7 @@ export function shell(user: User | null, active: Section, ...content: Child[]) {
         ),
       user && notifications.root,
       updateButton(), // the desktop app only: its version and updates
+      user && reportButton(),
       windowControls(), // only in the desktop app's frameless window
     ),
     h("main", { class: active === "settings" || active === null ? "page" : "page page--wide", id: "main" }, content),

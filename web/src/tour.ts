@@ -20,6 +20,12 @@ const STOPS: Stop[] = [
     text: "Every app you watch, problems on top: whether it's up, whether your last push is live, and what's about to expire. Open one for its deploys, errors, traffic and checks.",
   },
   {
+    // On the Apps page's header only: elsewhere it's passed over.
+    target: '.actions a[href="#/world"]',
+    title: "The World",
+    text: "The same apps as your own Silicon Valley, drawn from your real data: each app a campus, each light its state. It grows as your apps do.",
+  },
+  {
     target: '.nav a[href="#/status"]',
     title: "Status",
     text: "The status pages of the providers your apps run on, counting only the parts they actually use, and which of your apps an incident touches.",

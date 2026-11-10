@@ -125,6 +125,13 @@ export function createApp({
 
   api.get("/me", (c) => c.json({ user: currentUser(c) ?? null }));
 
+  api.patch("/me", async (c) => {
+    const user = currentUser(c);
+    if (!user) throw new HttpError(409, "Periskopos isn't set up yet");
+    const body = await jsonBody(c);
+    return c.json({ user: store.renameUser(db, user, requiredText(body.name, "Name", 80)) });
+  });
+
   api.post("/setup", async (c) => {
     if (currentUser(c)) throw new HttpError(409, "Periskopos is already set up");
     const body = await jsonBody(c);

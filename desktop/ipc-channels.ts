@@ -11,6 +11,7 @@ export const IPC_NAVIGATE = "periskopos:navigate"; // main -> page: go to a rout
 export const IPC_SET_CHROME_COLORS = "periskopos:set-chrome-colors";
 export const IPC_OPEN_LOGS = "periskopos:open-logs";
 export const IPC_OPEN_BACKUPS = "periskopos:open-backups"; // the database's copies, in the file manager
+export const IPC_OPEN_DATA = "periskopos:open-data"; // the data folder, in the file manager
 
 // The window is frameless on Windows and Linux: the page draws its own
 // minimize / maximize / close, so they cross as ordinary commands.
@@ -41,11 +42,18 @@ export const IPC_LOGIN_ITEM_GET = "periskopos:login-item-get";
 export const IPC_LOGIN_ITEM_SET = "periskopos:login-item-set";
 export const IPC_LOGIN_ITEM_STATE = "periskopos:login-item-state"; // main -> page: the answer to either
 
+// The app's theme and what closing its window does: the page asks, or changes
+// them, and hears back what they now are.
+export const IPC_SHELL_PREFS_GET = "periskopos:shell-prefs-get";
+export const IPC_SHELL_PREFS_SET = "periskopos:shell-prefs-set";
+export const IPC_SHELL_PREFS_STATE = "periskopos:shell-prefs-state"; // main -> page: the answer to either
+
 export const ALL_CHANNELS = [
   IPC_NAVIGATE,
   IPC_SET_CHROME_COLORS,
   IPC_OPEN_LOGS,
   IPC_OPEN_BACKUPS,
+  IPC_OPEN_DATA,
   IPC_WINDOW_MINIMIZE,
   IPC_WINDOW_TOGGLE_MAXIMIZE,
   IPC_WINDOW_CLOSE,
@@ -59,4 +67,7 @@ export const ALL_CHANNELS = [
   IPC_LOGIN_ITEM_GET,
   IPC_LOGIN_ITEM_SET,
   IPC_LOGIN_ITEM_STATE,
+  IPC_SHELL_PREFS_GET,
+  IPC_SHELL_PREFS_SET,
+  IPC_SHELL_PREFS_STATE,
 ] as const;

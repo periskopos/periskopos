@@ -20,7 +20,7 @@ function kindUnlessSaid(kind: string, reason: string): string | undefined {
 // What every tab starts with: the app's name and state, the tabs, and an
 // open incident or a recent recovery.
 
-export function header(page: AppPage, a: App, checkNow: HTMLElement) {
+export function header(page: AppPage, a: App, checkNow: HTMLElement, pause: HTMLElement) {
   const site = mainSite(a);
   const ms = site ? page.status?.checks[site.id]?.ms : undefined;
   return h(
@@ -33,7 +33,7 @@ export function header(page: AppPage, a: App, checkNow: HTMLElement) {
       h("div", { class: "app-title" }, appIcon(a, { large: true }), h("h1", null, a.name), status(page.status?.state ?? "checking", { ms })),
       h("span", { class: "app-url" }, ext(safeHref(a.url), hostOf(a.url))),
     ),
-    h("div", { class: "actions" }, checkNow),
+    h("div", { class: "actions" }, h("a", { class: "btn", href: `#/world/${encodeURIComponent(a.slug)}` }, "See on map"), pause, checkNow),
   );
 }
 

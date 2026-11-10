@@ -1,29 +1,46 @@
-import type { BackupStatus, Settings, StartupStatus, User } from "../../../shared/types.ts";
+import type { App, BackupStatus, Settings, StartupStatus, User } from "../../../shared/types.ts";
 import { api } from "../api.ts";
-import { asLoginItemState, desktopBridge } from "../desktop.ts";
+import type { ShellPrefs } from "../../../shared/desktop.ts";
+import { asLoginItemState, asShellPrefs, desktopBridge } from "../desktop.ts";
 import type { LoginItemState } from "../desktop.ts";
 import { h, mount } from "../dom.ts";
 import type { Child } from "../dom.ts";
 import { startTour } from "../tour.ts";
-import { busyButton, checkbox, errorBox, lamp, section, shell, toast } from "../ui.ts";
+import { settingRow, toggleRow } from "../settingRows.ts";
+import { busyButton, errorBox, lamp, section, shell, toast } from "../ui.ts";
+import { pauseSection } from "./alertPause.ts";
 import { backupsSection } from "./backups.ts";
+import { appearanceSections } from "./settingsAppearance.ts";
+import { aboutSection, exportSection, historySection, resetSection } from "./settingsData.ts";
+import type { About } from "./settingsData.ts";
+import { importSection } from "./settingsImport.ts";
+import { closeRow, intervalRows, updatesRow, youSection } from "./settingsGeneral.ts";
 import { assistantsSections } from "./assistants.ts";
 import { phoneAlertsSection } from "./phoneAlerts.ts";
 import type { PhoneSecrets } from "./phoneAlerts.ts";
 
 const isMac = /Mac/.test(navigator.userAgent);
 
-type About = { dataDir: string; keysFile: string; version: string };
+const ALERT_KINDS: { key: "alertOutages" | "alertDeploys" | "alertAccounts" | "alertProviders" | "alertWarnings"; label: string; hint: string }[] = [
+  { key: "alertOutages", label: "Apps going down or slow", hint: "After two failed checks in a row, and when it's back." },
+  { key: "alertDeploys", label: "Failed deploys and red CI", hint: "When a deploy fails or CI goes red, and when it's fixed." },
+  { key: "alertAccounts", label: "Expiries and accounts", hint: "Certificates, domains and keys about to expire, keys that stop working, free plans nearing their limit." },
+  { key: "alertProviders", label: "Provider incidents", hint: "When a provider's status page reports trouble in a part your apps use." },
+  { key: "alertWarnings", label: "Other warnings on your apps", hint: "Errors, payments, security, dependencies, traffic, spend, search and serious configuration findings." },
+];
 
 // Settings (IA: Settings), in tabs, each its own address (#/settings/data):
-// General (watching, start at login, the tour), Notifications (desktop and phone),
-// AI assistants, Data (backups, about).
-export type SettingsTab = "general" | "notifications" | "assistants" | "data";
+// General (you, watching, and the app itself: starting, closing, updates, the tour), Appearance,
+// Notifications (desktop and phone), AI assistants, Data (backups, history,
+// export, defaults), About.
+export type SettingsTab = "general" | "appearance" | "notifications" | "assistants" | "data" | "about";
 export const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
   { key: "general", label: "General" },
+  { key: "appearance", label: "Appearance" },
   { key: "notifications", label: "Notifications" },
   { key: "assistants", label: "AI assistants" },
   { key: "data", label: "Data" },
+  { key: "about", label: "About" },
 ];
 export const settingsTabOf = (sub: string | undefined): SettingsTab => SETTINGS_TABS.find((t) => t.key === sub)?.key ?? "general";
 
@@ -41,6 +58,8 @@ export function settingsView(root: Element, user: User, tab: SettingsTab = "gene
   let about: About | undefined;
   let backups: BackupStatus | undefined;
   let phoneSecrets: PhoneSecrets = { ntfyTopic: false, ntfyToken: false, telegramToken: false, resendKey: false };
+  let heldAlerts = 0;
+  let apps: App[] = [];
   let loaded = false;
   // In the installed app, start at login is switched right here (the shell
   // keeps it); elsewhere the page only says how it stands.
@@ -59,11 +78,28 @@ export function settingsView(root: Element, user: User, tab: SettingsTab = "gene
     });
   }
 
+  // The theme and what closing the window does are the app's own: in a browser
+  // tab there's nothing to change.
+  let shellPrefs: ShellPrefs | null = null;
+  bridge?.getShellPrefs?.((prefs) => {
+    shellPrefs = asShellPrefs(prefs);
+    if (loaded) draw();
+  });
+  function setShellPrefs(next: ShellPrefs) {
+    bridge?.setShellPrefs?.(next, (prefs) => {
+      shellPrefs = asShellPrefs(prefs);
+      toast("Saved");
+      draw();
+    });
+  }
+
   async function load() {
     try {
-      ({ settings, startup, about, phoneSecrets, backups } = await api<{ settings: Settings; startup: StartupStatus; about?: About; phoneSecrets: PhoneSecrets; backups?: BackupStatus }>("GET", "/settings"));
+      ({ settings, startup, about, phoneSecrets, backups, heldAlerts } = await api<{ settings: Settings; heldAlerts: number; startup: StartupStatus; about?: About; phoneSecrets: PhoneSecrets; backups?: BackupStatus }>("GET", "/settings"));
+      if (tab === "notifications") ({ apps } = await api<{ apps: App[] }>("GET", "/apps"));
       loaded = true;
       draw();
+      watchPauseEnds();
     } catch (err) {
       mount(body, errorBox(err));
     }
@@ -83,33 +119,67 @@ export function settingsView(root: Element, user: User, tab: SettingsTab = "gene
   // Made once per visit to the tab: it loads and redraws itself, so a save
   // elsewhere on the page doesn't reload it.
   const assistantParts = tab === "assistants" ? assistantsSections() : [];
+  // Made once: what a file would do stays on screen while the page redraws.
+  const importPart = importSection(() => load());
+  const pauseChoice = { value: "" };
+
+  // A pause that ends while this page is open stops being true: read again then.
+  let pauseEnds: ReturnType<typeof setTimeout> | undefined;
+  function watchPauseEnds() {
+    clearTimeout(pauseEnds);
+    if (tab !== "notifications") return;
+    const now = Date.now();
+    const ends = [settings.alertsPausedUntil, ...Object.values(settings.appPauses)].map((t) => Date.parse(t)).filter((t) => t > now);
+    if (ends.length === 0) return;
+    // A little after: the watcher's next pass is what sends the message.
+    pauseEnds = setTimeout(() => {
+      if (body.isConnected) void load();
+    }, Math.min(...ends) - now + 1000);
+  }
 
   function draw() {
     const testSlot = h("div");
+    // A test always gets through, so it can't be taken for the real thing being on.
+    const sentNote = (text: string) => h("p", { class: "meta" }, settings.notificationsEnabled ? text : `${text} Notify me is off, so real alerts won't come until you turn it on.`);
     const watching = () =>
       section("Watching", {
         body: [
-          checkbox("watcherEnabled", "Watch apps in the background", "Checks each app on its interval and records history. While off, that time shows as not watched.", settings.watcherEnabled, (on) => save({ watcherEnabled: on })),
+          toggleRow("watcherEnabled", "Watch apps in the background", "Checks each app on its interval and records history. While off, that time shows as not watched.", settings.watcherEnabled, (on) => save({ watcherEnabled: on })),
+          intervalRows(settings, save),
         ],
       });
     const notifications = () =>
-      section("Notifications", {
+      section("Alerts", {
         body: [
-          checkbox("notificationsEnabled", "Notify me", "When an app goes down (two failed checks in a row) and when it's back; when a deploy fails or CI goes red.", settings.notificationsEnabled, (on) => save({ notificationsEnabled: on })),
-          checkbox(
-            "incidentAlarm",
-            "Sound an alarm for provider incidents",
-            "When a provider's status page (Cloudflare, GitHub…) reports an incident in a part your apps use. On Windows it stays on screen and keeps ringing until you dismiss it.",
-            settings.incidentAlarm,
-            (on) => save({ incidentAlarm: on }),
+          toggleRow(
+            "notificationsEnabled",
+            "Notify me",
+            "On this computer, and your phone if it's set up below. An AI assistant asking to act always tells you.",
+            settings.notificationsEnabled,
+            (on) => save({ notificationsEnabled: on }),
           ),
+          ALERT_KINDS.map((k) => [
+            toggleRow(k.key, k.label, k.hint, settings[k.key], (on) => save({ [k.key]: on }), { disabled: !settings.notificationsEnabled, sub: true }),
+            // The alarm is a louder way of hearing about provider incidents, so it sits under them.
+            k.key === "alertProviders" &&
+              toggleRow(
+                "incidentAlarm",
+                "Sound an alarm for provider incidents",
+                settings.notificationsEnabled && settings.alertProviders
+                  ? "When a provider's status page (Cloudflare, GitHub…) reports an incident in a part your apps use. On Windows it stays on screen and keeps ringing until you dismiss it."
+                  : "Needs Notify me and provider incidents on: without them, a provider's incident doesn't sound anything.",
+                settings.incidentAlarm,
+                (on) => save({ incidentAlarm: on }),
+                { disabled: !settings.notificationsEnabled || !settings.alertProviders, sub: true },
+              ),
+          ]),
           h(
             "div",
             { class: "actions" },
             busyButton("Send a test notification", "Sending…", async () => {
               try {
                 await api("POST", "/notifications/test");
-                testSlot.replaceChildren(h("p", { class: "meta" }, "Sent. It should appear in a moment."));
+                testSlot.replaceChildren(sentNote("Sent. It should appear in a moment."));
               } catch (err) {
                 testSlot.replaceChildren(errorBox(err));
               }
@@ -117,7 +187,7 @@ export function settingsView(root: Element, user: User, tab: SettingsTab = "gene
             busyButton("Test the alarm", "Sending…", async () => {
               try {
                 await api("POST", "/notifications/test", { alarm: true });
-                testSlot.replaceChildren(h("p", { class: "meta" }, "Sent. Dismiss it to stop the sound."));
+                testSlot.replaceChildren(sentNote("Sent. Dismiss it to stop the sound."));
               } catch (err) {
                 testSlot.replaceChildren(errorBox(err));
               }
@@ -129,31 +199,33 @@ export function settingsView(root: Element, user: User, tab: SettingsTab = "gene
       });
     const legacyService = startup.enabled && startup.managedBy !== "desktop";
     const startAtLogin = () =>
-      section("Start at login", {
-        body: loginItem?.available && !legacyService
-          ? [
-              checkbox(
-                "startAtLogin",
-                "Start Periskopos when you log in",
-                "It opens in the tray, without a window, and starts watching straight away. Also in the tray icon's menu.",
-                loginItem.enabled,
-                setLoginItem,
-              ),
-            ]
-          : !startup.supported
-          ? [h("p", { class: "secondary" }, "Not available on this system.")]
-          : [
-              h("p", { class: "key-line" }, lamp(startup.enabled ? "up" : "none"), startup.enabled ? "On: Periskopos starts by itself when you log in." : "Off: Periskopos runs only while you start it."),
+      loginItem?.available && !legacyService
+        ? toggleRow(
+            "startAtLogin",
+            "Start Periskopos when you log in",
+            "It opens in the tray, without a window, and starts watching straight away. Also in the tray icon's menu.",
+            loginItem.enabled,
+            setLoginItem,
+          )
+        : !startup.supported
+        ? settingRow("Start at login", "Not available on this system.")
+        : settingRow(
+            "Start at login",
+            [
+              h("span", null, startup.enabled ? "Periskopos starts by itself when you log in." : "Periskopos runs only while you start it."),
               startup.managedBy === "desktop" || !startup.enabled
-                ? h("p", { class: "meta" }, "To change it, right-click the Periskopos icon in the system tray (the menu bar on a Mac) and use Start at login.")
-                : h("p", { class: "meta" }, "It was set up with the old ", h("code", null, "npm run install-service"), ", which can't open Periskopos any more: run ", h("code", null, "npm run uninstall-service"), " in the periskopos folder, then use Start at login in the tray menu."),
+                ? h("span", null, "To change it, right-click the Periskopos icon in the system tray (the menu bar on a Mac) and use Start at login.")
+                : h("span", null, "It was set up with the old ", h("code", null, "npm run install-service"), ", which can't open Periskopos any more: run ", h("code", null, "npm run uninstall-service"), " in the periskopos folder, then use Start at login in the tray menu."),
             ],
-      });
-    const tour = () =>
-      section("Guided tour", {
+            h("span", { class: "key-line" }, lamp(startup.enabled ? "up" : "none"), startup.enabled ? "On" : "Off"),
+          );
+    const thisApp = () =>
+      section("This app", {
         body: [
-          h("p", { class: "secondary" }, "The short walk around the app you saw after setting up."),
-          h("div", { class: "actions" }, h("button", { type: "button", class: "btn", onclick: () => startTour() }, "Take the tour")),
+          startAtLogin(),
+          shellPrefs && !isMac && closeRow(shellPrefs, setShellPrefs),
+          bridge?.updateAction && updatesRow(bridge),
+          settingRow("Guided tour", "The short walk around the app you saw after setting up.", h("button", { type: "button", class: "btn", onclick: () => startTour() }, "Take the tour")),
         ],
       });
     const backupsPart = () =>
@@ -162,56 +234,35 @@ export function settingsView(root: Element, user: User, tab: SettingsTab = "gene
           backups = next;
           draw();
         });
-    // Where the diagnostics show when the clipboard can't be written: ready
-    // to select and copy by hand.
-    const diagnosticsSlot = h("div");
-    const aboutPart = () =>
-      section("About", {
-        body: [
-          h(
-            "dl",
-            { class: "facts" },
-            h("dt", { class: "label" }, "You"),
-            h("dd", null, user.name),
-            about && [h("dt", { class: "label" }, "Data"), h("dd", { class: "mono meta" }, about.dataDir)],
-            about && [h("dt", { class: "label" }, "Keys"), h("dd", { class: "mono meta" }, about.keysFile)],
-            about && [h("dt", { class: "label" }, "Version"), h("dd", { class: "mono meta" }, about.version)],
-          ),
-          h(
-            "div",
-            { class: "actions" },
-            busyButton("Copy diagnostics", "Copying…", async () => {
-              let report: string;
-              try {
-                const r = await fetch("/api/diagnostics", { credentials: "same-origin" });
-                if (!r.ok) throw new Error(`Couldn't read the diagnostics (HTTP ${r.status})`);
-                report = await r.text();
-              } catch (err) {
-                toast((err as Error).message, "down");
-                return;
-              }
-              try {
-                await navigator.clipboard.writeText(report);
-                diagnosticsSlot.replaceChildren();
-                toast("Copied: paste it into your bug report");
-              } catch {
-                const box = h("textarea", { class: "mono diagnostics-text", readonly: true, rows: 12, "aria-label": "Diagnostics" }, report) as HTMLTextAreaElement;
-                diagnosticsSlot.replaceChildren(h("p", { class: "meta" }, "Copying isn't allowed here: select the text below and copy it."), box);
-                box.focus();
-                box.select();
-              }
-            }),
-          ),
-          diagnosticsSlot,
-          h("p", { class: "meta" }, "For a bug report: the version, your system, what's connected (by kind, never by name) and the server's recent errors. Keys, addresses, app names and your name are left out."),
-        ],
-      });
-
     const parts: Record<SettingsTab, () => Child[]> = {
-      general: () => [watching(), startAtLogin(), tour()],
-      notifications: () => [notifications(), phoneAlertsSection(settings, phoneSecrets, save, load)],
+      general: () => [youSection(user), watching(), thisApp()],
+      appearance: () => appearanceSections(shellPrefs, setShellPrefs, draw),
+      notifications: () => [
+        notifications(),
+        pauseSection(
+          settings,
+          heldAlerts,
+          apps,
+          async (patch) => {
+            await save(patch);
+            await load();
+          },
+          async (app, until) => {
+            try {
+              await api("POST", `/apps/${encodeURIComponent(app.slug)}/pause`, { until });
+              toast("Saved");
+            } catch (err) {
+              toast((err as Error).message, "down");
+            }
+            await load();
+          },
+          pauseChoice,
+        ),
+        phoneAlertsSection(settings, phoneSecrets, save, load),
+      ],
       assistants: () => assistantParts,
-      data: () => [backupsPart(), aboutPart()],
+      data: () => [backupsPart(), historySection(settings, about, save, draw), exportSection(), importPart, resetSection(load)],
+      about: () => [aboutSection(about)],
     };
     mount(body, ...parts[tab]());
   }

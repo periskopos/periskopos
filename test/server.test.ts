@@ -217,6 +217,27 @@ describe("apps and connections", () => {
   });
 });
 
+describe("the watcher's log", () => {
+  beforeEach(setUp);
+
+  type Log = { off: boolean; checks: { at: string; state: string; slug: string; app: string; what: string; ms?: number }[] };
+  const read = async () => (await (await call("GET", "/api/watcher/log")).json()) as Log;
+
+  test("says what was checked, newest first, and nothing before there's anything", async () => {
+    assert.deepEqual((await read()).checks, []);
+    await call("POST", "/api/apps", { name: "Shop", url: "http://shop.test/" });
+    await call("GET", "/api/apps/shop/status");
+    await call("GET", "/api/apps/shop/status?refresh=1");
+    const { checks, off } = await read();
+    assert.equal(off, false);
+    assert.ok(checks.length >= 2);
+    assert.equal(checks[0]!.slug, "shop");
+    assert.equal(checks[0]!.app, "Shop");
+    assert.ok(checks[0]!.what.length > 0);
+    assert.ok(checks.every((c, i) => i === 0 || c.at <= checks[i - 1]!.at));
+  });
+});
+
 describe("status (site check)", () => {
   beforeEach(setUp);
 

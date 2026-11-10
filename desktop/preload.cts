@@ -12,6 +12,11 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 type Colors = { background: string; foreground: string; accent: string };
 
+// The shell answers every get and set on one channel, in the order it was asked: each
+// answer goes to the oldest call still waiting, so two close together can't swap replies.
+const waitingForPrefs: ((prefs: unknown) => void)[] = [];
+ipcRenderer.on("periskopos:shell-prefs-state", (_event, prefs: unknown) => waitingForPrefs.shift()?.(prefs));
+
 contextBridge.exposeInMainWorld("periskoposShell", {
   platform: process.platform,
 
@@ -32,6 +37,9 @@ contextBridge.exposeInMainWorld("periskoposShell", {
   },
   openBackups(): void {
     ipcRenderer.send("periskopos:open-backups");
+  },
+  openData(): void {
+    ipcRenderer.send("periskopos:open-data");
   },
 
   // Window controls: the page draws its own title bar.
@@ -81,5 +89,15 @@ contextBridge.exposeInMainWorld("periskoposShell", {
   setStartAtLogin(on: boolean, handler: (state: unknown) => void): void {
     ipcRenderer.once("periskopos:login-item-state", (_event, state: unknown) => handler(state));
     ipcRenderer.send("periskopos:login-item-set", on === true);
+  },
+  // The app's theme and what closing its window does. The shell checks what it's
+  // given, and the page checks what comes back.
+  getShellPrefs(handler: (prefs: unknown) => void): void {
+    waitingForPrefs.push(handler);
+    ipcRenderer.send("periskopos:shell-prefs-get");
+  },
+  setShellPrefs(prefs: unknown, handler: (prefs: unknown) => void): void {
+    waitingForPrefs.push(handler);
+    ipcRenderer.send("periskopos:shell-prefs-set", prefs);
   },
 });

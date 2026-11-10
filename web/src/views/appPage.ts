@@ -3,6 +3,7 @@ import type {
   ActionResult,
   ActivityEntry,
   App,
+  AppPause,
   AppHistory,
   AppStatus,
   ConfigReport,
@@ -18,6 +19,7 @@ import { busyButton, errorBox, shell, toast } from "../ui.ts";
 import { openActionDialog } from "./actionsParts.ts";
 import type { ActionsList } from "./actionsParts.ts";
 import { banner, header, tabs } from "./app/header.ts";
+import { pauseBanners, pauseControl } from "./app/pauseButton.ts";
 import { history } from "./app/history.ts";
 import { overview } from "./app/overview.ts";
 import type { AppPage, AppTab, SettingsPart } from "./app/page.ts";
@@ -63,6 +65,8 @@ export function appView(root: Element, user: User, slug: string, tab: AppTab, go
     searchRange: "week",
     gapsOpen: false,
     draw: () => draw(),
+    drawPause: () => drawPause(),
+    pauseEdits: 0,
     afterSubmit: () => {
       lastEdit = 0;
       return load();
@@ -118,6 +122,12 @@ export function appView(root: Element, user: User, slug: string, tab: AppTab, go
     else if (alive) toast("Couldn't check: see the message on the page", "down");
   });
 
+  const pause = pauseControl(page);
+  // Its own slot: a form being edited holds back the page's redraws, and this
+  // has to say what just happened all the same.
+  const pauseSlot = h("div", { class: "pause-slot" });
+  const drawPause = () => mount(pauseSlot, ...pauseBanners(page));
+
   // Resolves true when everything the page needs arrived, false when
   // something failed (the page then shows why). Never throws.
   async function load(refresh = false): Promise<boolean> {
@@ -126,6 +136,7 @@ export function appView(root: Element, user: User, slug: string, tab: AppTab, go
       if (!alive) return false;
       failure = undefined;
       draw();
+      const pauseEdits = page.pauseEdits;
       // Each part is caught on its own, so one failing request keeps what the
       // others brought (and what the last load had) instead of blanking the
       // page; the first failure is shown above the content.
@@ -135,7 +146,7 @@ export function appView(root: Element, user: User, slug: string, tab: AppTab, go
           partFailure ??= err;
           return undefined;
         });
-      const [statusAnswer, historyAnswer, servicesAnswer, providers, protocolAnswer, actionsAnswer, activityAnswer, configAnswer] = await Promise.all([
+      const [statusAnswer, historyAnswer, servicesAnswer, providers, protocolAnswer, actionsAnswer, activityAnswer, configAnswer, pauseAnswer] = await Promise.all([
         part(api<{ status: AppStatus }>("GET", `${apiBase}/status${refresh ? "?refresh=1" : ""}`)),
         part(api<{ history: AppHistory }>("GET", `${apiBase}/history`)),
         part(api<{ services: ServiceView[] }>("GET", "/services")),
@@ -146,6 +157,7 @@ export function appView(root: Element, user: User, slug: string, tab: AppTab, go
         api<{ activity: ActivityEntry[] }>("GET", `${apiBase}/activity`).catch(() => undefined),
         // The tab's count comes with every tab; its own tab says why it failed.
         api<{ report: ConfigReport }>("GET", `${apiBase}/config`).catch((err: unknown) => err as Error),
+        api<AppPause>("GET", `${apiBase}/pause`).catch(() => undefined),
       ]);
       page.status = statusAnswer?.status ?? page.status;
       page.hist = historyAnswer?.history ?? page.hist;
@@ -153,6 +165,7 @@ export function appView(root: Element, user: User, slug: string, tab: AppTab, go
       page.providers = providers;
       page.protocol = protocolAnswer?.protocol ?? page.protocol;
       page.actions = actionsAnswer;
+      if (pauseEdits === page.pauseEdits) page.pause = pauseAnswer ?? page.pause;
       page.activity = activityAnswer?.activity ?? page.activity;
       page.config = configAnswer instanceof Error ? (page.config instanceof Error || !page.config ? configAnswer : page.config) : configAnswer.report;
       // Never checked yet (a new app): check now rather than "within a few
@@ -208,13 +221,15 @@ export function appView(root: Element, user: User, slug: string, tab: AppTab, go
 
   function draw() {
     if (failure && !page.app) return mount(body, errorBox(failure));
+    drawPause();
     if (!page.app || editing()) return;
     const a = page.app;
     mount(
       body,
-      header(page, a, checkNow),
+      header(page, a, checkNow, pause.root),
       tabs(page, a),
       banner(page),
+      pauseSlot,
       ...providerBanners(page.providers, slug),
       failure ? errorBox(failure) : null,
       ...tabBody(a),
@@ -247,6 +262,7 @@ export function appView(root: Element, user: User, slug: string, tab: AppTab, go
   }, 10_000);
   return () => {
     alive = false;
+    pause.destroy();
     clearInterval(reload);
     clearInterval(fast);
   };

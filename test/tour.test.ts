@@ -72,6 +72,27 @@ describe("the guided tour", () => {
     assert.equal(document.querySelector(".tour") === null, true, "the tour is gone");
   });
 
+  test("stops at the World where the Apps page offers it", () => {
+    nav("#/");
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const world = document.createElement("a");
+    world.setAttribute("href", "#/world");
+    world.getBoundingClientRect = () => ({ left: 700, top: 80, right: 760, bottom: 110, width: 60, height: 30, x: 700, y: 80, toJSON() {} }) as DOMRect;
+    actions.append(world);
+    document.body.append(actions);
+    try {
+      startTour();
+      press("Next");
+      press("Next");
+      assert.equal(at(), "3 of 4 · The World");
+      assert.equal(document.querySelector<HTMLElement>(".tour-spotlight")?.style.left, "696px");
+    } finally {
+      key("Escape");
+      actions.remove();
+    }
+  });
+
   test("Skip ends it, and it can be taken again from Settings", () => {
     startTour();
     press("Skip");

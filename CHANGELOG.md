@@ -4,6 +4,88 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
+## Next release
+
+- **The World:** a second way to see the Apps page, as your own Silicon Valley, drawn from
+  your real data. A highway comes in from the side and becomes a curving main road, with a
+  campus for each app in front of it, the services they rely on behind them on higher ground,
+  and the watcher's dish on a hill behind those. Adding an app never moves a service.
+  Everything in it is a fact from the same data as the Apps page: a floor for each thing
+  watched, fog for what isn't known, frost for no recent data, smoke when an app is down, a
+  crane during a deploy. There is no decoration: nothing is drawn that says nothing. Open it from the Apps page, **See on map** on an app's page, or
+  `periskopos://world`. It opens by coming down through cloud while the picture gets ready.
+- **Signs and lights:** each building has a sign on its roof with the app's or service's logo,
+  turning to face you, and a light on a short mast above it: green running, amber needs
+  attention, red down, blue a service's maintenance. It's lit only while the state is known,
+  and the screen behind the logo is tinted to match. A thin line between two buildings is a
+  real dependency of that app on that service.
+- **The key, and how to read the map:** **What am I looking at?** is a key grouped by Needs a
+  look, Under way, Not known and Fine. What's on the map now is lit up, and clicking a status
+  takes you to the next thing that has it. The full explanation opens from **?**.
+- **Since you last looked:** opening the World says what went wrong while you were away, what
+  recovered and which apps were added, each a click away. Only what's on the record: deploys
+  aren't kept, so they aren't counted.
+- **A valley that grows:** a new app's campus comes up floor by floor, one that's watching
+  more or getting more traffic visibly grows, and the valley floor widens at a new stage:
+  small up to 3 apps, wider from 4, widest from 10. What changed while you were away
+  plays when you come back.
+- **Everything on the road is real, and you can click it:** a van is one check the watcher
+  really made, in the colour of its result. A truck is a deploy under way, or stopped at the
+  door when a push isn't live. Cars are a share of an app's real requests where its
+  Cloudflare domain is connected, which also sets how wide its building is and how full the
+  car park.
+- **The watcher:** a radio dish on its own hill turns only while your apps are being checked.
+  Clicking it opens a radar of everything on the map and the log of its latest checks.
+- **Figures:** Running, Deploying (only while something is), Requests, Lowest uptime with the
+  app it belongs to, and Last check run across the top, and each opens what it's about. When
+  all is well they step back to one quiet line. The title says "All systems normal" only when
+  the services your apps rely on are fine too, here and on the Apps page.
+- **Moving round:** drag, turn and zoom, smoothly and by how far you scroll, on a mouse or a
+  trackpad. **Tour** goes round every campus, whatever most needs looking at first. The map's
+  one setting, its sky (by your clock or your theme), is behind a gear.
+- **What changed:** an app that changes state sends out rings and its label pulses, and a
+  Recent changes card says what happened and when.
+- **Replay:** a slider shows how every app stood at any moment of the last 24 hours, from the
+  incident record, greyed and with nothing on the road, so it can't pass for now.
+- **Works by keyboard, and goes easy on the machine:** arrow keys, zoom, turn and Tab all
+  work, and the key reaches screen readers. It draws less when another window has the focus
+  and stops when it can't be seen. The 3D code loads only when the page is opened. On a
+  machine that can't keep up it lowers its own detail. The guided tour stops at the World
+  button on the Apps page.
+- **Uptime strips:** every live app on the Apps page shows its last 30 days, one small bar a
+  day, in the list and on cards. Hover a day for its uptime and outages, click to open the
+  app's history. A day nothing was watching stays blank, not green.
+- **Apps list:** every column now starts under its heading and keeps its place, a long name or
+  message is cut short rather than pushing the page sideways, and the state shows once instead
+  of twice. On a wide window the spare room goes to the uptime strip.
+- **Charts:** Traffic and Search now share one chart: a line with a real axis and gridlines, a
+  crosshair and a proper tooltip on hover, and a switch between measures (requests or
+  visitors, clicks or impressions). The period still counting is dashed, so a part-filled hour
+  doesn't look like a drop, and days when 5% or more of requests failed are marked. Search
+  also gets the table of numbers.
+- **Choosing your alerts:** under **Notify me**, each kind of alert has its own switch.
+  **Pause alerts** quiets all of them, or one app's from its own page, for 1 hour, 4 hours or
+  until 8 am, and when the pause ends one message says what you missed.
+- **Settings in full:** six tabs (General, Appearance, Notifications, AI assistants, Data,
+  About), one row per setting, with switches for what saves at once. New: your name, the
+  interval for new apps (and for all of them), what closing the window does, the page it
+  opens on, 12- or 24-hour times, how long history is kept, and restoring the defaults.
+  `periskopos://settings/...` links reach every tab.
+- **Export and import a setup:** **Export my setup** saves your apps, checks, accounts' names
+  and settings as a file, without keys or history. **Import** says what it would do before it
+  does anything, only adds, and connects what was waiting once you've added the accounts.
+- **Report an issue:** a bug button in the title bar copies the diagnostics, now including how
+  the World has run on this computer, and opens the bug form. Nothing is sent by itself.
+- **Smaller things:** dropdowns are drawn in the app's own colours with a tick on the current
+  choice. Every disclosure toggle is at least 24px tall. Long paths and figures no longer
+  push pages sideways on a narrow window.
+- **Safer settings, import and alerts:** an exported setup no longer carries where your alerts go
+  (addresses, chat id) or a pause, only the settings an import takes back. An import is all or
+  nothing, and a file over 6 MB is refused. A damaged row in the settings can't stop the checks
+  any more. "Checks stopped" is dropped during a pause instead of arriving days late. An
+  assistant limited to some apps no longer sees the pauses of the others, and a link with a
+  broken encoding no longer shows the "unreachable" page.
+
 ## 0.4.1 (2026-11-05)
 
 - **A failed Dependabot job isn't failing CI:** when Dependabot can't make an

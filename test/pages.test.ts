@@ -1,12 +1,18 @@
+import { parseDeepLink } from "../desktop/deep-link.ts";
+import { clockPref, saveClockPref } from "../web/src/prefs.ts";
+import { clock } from "../web/src/format.ts";
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
 // First: it puts the DOM in place, which ui.ts needs as it loads.
 import { sectionOf, settle, text, unnamed, until } from "./dom-helpers.ts";
+import { diagnostics, recordWorldPerf } from "../server/diagnostics.ts";
+import { BUG_FORM_URL, reportIssue } from "../web/src/reportButton.ts";
+import { pictureSize, watchWorldPerf, worldPerfSoFar } from "../web/src/views/world/perf.ts";
 import { h, mount } from "../web/src/dom.ts";
 import { ACCOUNTS } from "../shared/catalog.ts";
-import type { User } from "../shared/types.ts";
+import type { BackupStatus, User } from "../shared/types.ts";
 import { createApp } from "../server/app.ts";
 import { Backups } from "../server/backup.ts";
 import { openDb } from "../server/db.ts";
@@ -23,6 +29,7 @@ import { firstRunView } from "../web/src/views/firstRun.ts";
 import { fleetView } from "../web/src/views/fleet.ts";
 import { connectServiceView, servicesView } from "../web/src/views/services.ts";
 import { asLoginItemState } from "../web/src/desktop.ts";
+import { backupsSection } from "../web/src/views/backups.ts";
 import { SETTINGS_TABS, settingsTabOf, settingsView } from "../web/src/views/settings.ts";
 import type { SettingsTab } from "../web/src/views/settings.ts";
 import { tempDir } from "./tmp.ts";
@@ -400,12 +407,18 @@ describe("AI assistants, on screen", () => {
 });
 
 describe("Settings, adding an app, the first run", () => {
+  test("a periskopos:// link reaches every Settings tab", () => {
+    for (const tab of SETTINGS_TABS) assert.equal(parseDeepLink(`periskopos://settings/${tab.key}`), `#/settings/${tab.key}`);
+  });
+
   test("Settings: a tab for each kind of setting, each with its sections, every control named", async () => {
     const sections: Record<SettingsTab, string[]> = {
-      general: ["Watching", "Start at login"],
-      notifications: ["Notifications", "Phone alerts"],
+      general: ["You", "Watching", "This app"],
+      appearance: ["Display"],
+      notifications: ["Alerts", "Pause alerts", "Phone alerts"],
       assistants: ["Connection"],
-      data: ["Backups", "About"],
+      data: ["Backups", "History", "Export", "Import", "Restore default settings"],
+      about: ["About"],
     };
     for (const tab of SETTINGS_TABS) {
       const root = page();
@@ -414,7 +427,7 @@ describe("Settings, adding an app, the first run", () => {
       // The tab bar marks where you are, and links each tab by its own address.
       const current = root.querySelector(".tabs a[aria-current=page]");
       assert.equal(text(current), tab.label);
-      assert.deepEqual([...root.querySelectorAll(".tabs a")].map((a) => a.getAttribute("href")), ["#/settings", "#/settings/notifications", "#/settings/assistants", "#/settings/data"]);
+      assert.deepEqual([...root.querySelectorAll(".tabs a")].map((a) => a.getAttribute("href")), ["#/settings", "#/settings/appearance", "#/settings/notifications", "#/settings/assistants", "#/settings/data", "#/settings/about"]);
       for (const title of sections[tab.key]) assert.ok(sectionOf(root, title), `${tab.key}: ${title}`);
       // Only that tab's sections.
       const others = Object.entries(sections).filter(([k]) => k !== tab.key).flatMap(([, t]) => t);
@@ -426,23 +439,208 @@ describe("Settings, adding an app, the first run", () => {
     assert.equal(settingsTabOf(undefined), "general");
   });
 
+  test("Notifications: with Notify me off the alarm can't be switched, and a test says real alerts won't come", async () => {
+    updateSettings(db, user.id, { notificationsEnabled: false });
+    try {
+      const root = page();
+      settingsView(root, user, "notifications");
+      await until(() => sectionOf(root, "Alerts")?.querySelector("input[name=incidentAlarm]"));
+      const part = sectionOf(root, "Alerts")!;
+      assert.equal(part.querySelector<HTMLInputElement>("input[name=incidentAlarm]")!.disabled, true);
+      assert.match(text(part), /Needs Notify me/);
+      [...part.querySelectorAll("button")].find((b) => /test notification/.test(b.textContent ?? ""))!.click();
+      await until(() => /real alerts won't come/.test(text(sectionOf(root, "Alerts"))));
+      assert.match(text(sectionOf(root, "Alerts")), /real alerts won't come/);
+    } finally {
+      updateSettings(db, user.id, { notificationsEnabled: true });
+    }
+  });
+
+  test("General: your name can be changed, and new apps' interval chosen", async () => {
+    const root = page();
+    const me = { ...user };
+    settingsView(root, me, "general");
+    await until(() => sectionOf(root, "You")?.querySelector("input[name=name]"));
+    root.querySelector<HTMLInputElement>("input[name=name]")!.value = "Renamed";
+    sectionOf(root, "You")!.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await until(() => store.getLocalUser(db)?.name === "Renamed");
+    assert.equal(store.getLocalUser(db)?.name, "Renamed");
+    store.renameUser(db, store.getLocalUser(db)!, user.name);
+    const select = root.querySelector<HTMLSelectElement>("select[name=defaultCheckIntervalMin]")!;
+    assert.equal(select.querySelector("option[selected]")?.textContent, "Every 5 minutes");
+    select.value = "15";
+    select.dispatchEvent(new Event("change"));
+    await until(() => getSettings(db, user.id).defaultCheckIntervalMin === 15);
+    assert.equal(getSettings(db, user.id).defaultCheckIntervalMin, 15);
+    updateSettings(db, user.id, { defaultCheckIntervalMin: 5 });
+  });
+
+  test("Appearance: a browser tab says the theme follows the system; times can be 24-hour", async () => {
+    const root = page();
+    settingsView(root, user, "appearance");
+    await until(() => sectionOf(root, "Display")?.querySelector("input[name=clock]"));
+    assert.match(text(sectionOf(root, "Display")), /follows your system/);
+    assert.equal(root.querySelector("input[name=theme]"), null);
+    assert.deepEqual([...root.querySelectorAll<HTMLInputElement>("input[name=clock]")].map((r) => [r.value, r.checked]), [["system", true], ["12", false], ["24", false]]);
+    const radio = root.querySelector<HTMLInputElement>("input[name=clock][value='24']")!;
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change"));
+    assert.equal(clockPref(), "24");
+    await until(() => root.querySelector<HTMLInputElement>("input[name=clock][value='24']")?.checked);
+    assert.equal(root.querySelector<HTMLInputElement>("input[name=clock][value='24']")!.checked, true, "the redraw shows what was chosen");
+    assert.deepEqual(unnamed(root), []);
+    assert.doesNotMatch(clock("2026-11-06T15:30:00Z"), /[AP]M/i);
+    saveClockPref("12");
+    assert.match(clock("2026-11-06T15:30:00Z"), /[AP]M/i);
+    saveClockPref("system");
+  });
+
+  test("Report an issue: the title bar's button copies the diagnostics, then opens the form", async () => {
+    const root = page();
+    settingsView(root, user, "about");
+    await until(() => root.querySelector("button[aria-label='Report an issue']"));
+    assert.ok(root.querySelector(".topbar button[aria-label='Report an issue']"));
+    const steps: string[] = [];
+    const nav = globalThis.navigator as unknown as { clipboard?: unknown };
+    const before = Object.getOwnPropertyDescriptor(nav, "clipboard");
+    Object.defineProperty(nav, "clipboard", { configurable: true, value: { writeText: async (t: string) => void steps.push(`copied ${t.slice(0, 10)}`) } });
+    try {
+      await reportIssue((url) => void steps.push(`opened ${url}`));
+      assert.deepEqual(steps, ["copied Periskopos", `opened ${BUG_FORM_URL}`]);
+    } finally {
+      if (before) Object.defineProperty(nav, "clipboard", before);
+      else delete nav.clipboard;
+    }
+  });
+
+  test("the World's numbers reach the diagnostics through the server, only slow frames that mean it counting", async () => {
+    const context = { getExtension: () => null, getParameter: () => "ANGLE (NVIDIA GeForce RTX 3060 (0x00002504) Direct3D11)", RENDERER: 1 } as unknown as WebGLRenderingContext;
+    const perf = watchWorldPerf(context, () => pictureSize(120, 450_000, 1.25, 1920, 1080));
+    perf.pictured();
+    for (let i = 0; i < 90; i++) perf.frame(33, 4, true);
+    for (let i = 0; i < 10; i++) perf.frame(60, 9, true);
+    perf.frame(166, 4, false); // slow on purpose
+    perf.frame(60_000, 4, true); // asleep
+    perf.level(2);
+    perf.level(1);
+    perf.lost();
+    const sofar = worldPerfSoFar();
+    assert.equal(sofar.frames, 100);
+    assert.equal(sofar.typicalMs, 33);
+    assert.equal(sofar.slow99Ms, 60);
+    assert.equal(sofar.over50MsPercent, 10);
+    assert.equal(sofar.lowestDetail, 2);
+    assert.equal(sofar.detail, 1);
+    assert.equal(sofar.pixelRatio, 1.5, "rounded to a half");
+    assert.equal(sofar.megapixels, 3, "rounded to a half");
+    perf.stop();
+    await until(() => /Frame time: typical 33 ms/.test(diagnostics(db)));
+    const report = diagnostics(db);
+    assert.match(report, /World: \d+ visit/);
+    assert.match(report, /10% over 50 ms/);
+    assert.match(report, /Graphics: ANGLE \(NVIDIA GeForce RTX 3060 Direct3D11\)/);
+    recordWorldPerf(null);
+  });
+
+  test("Settings rows: a switch and a dropdown are named by their title, and described by their hint", async () => {
+    const root = page();
+    settingsView(root, user, "general");
+    await until(() => root.querySelector("input[name=watcherEnabled]"));
+    const watch = root.querySelector<HTMLInputElement>("input[name=watcherEnabled]")!;
+    assert.equal(watch.type, "checkbox");
+    assert.equal(watch.getAttribute("role"), "switch");
+    assert.equal(watch.getAttribute("aria-label"), "Watch apps in the background");
+    assert.match(text(root.querySelector(`#${watch.getAttribute("aria-describedby")}`)), /records history/);
+    assert.ok(watch.closest("label.setting-row"), "the whole row is the switch's label");
+    const select = root.querySelector<HTMLSelectElement>("select[name=defaultCheckIntervalMin]")!;
+    assert.equal(text(root.querySelector(`label[for="${select.id}"]`)), "Check new apps");
+    assert.match(text(root.querySelector(`#${select.getAttribute("aria-describedby")}`)), /keep their own pace/);
+  });
+
+  test("Notifications: the alarm sits under provider incidents, and each kind is a row under Notify me", async () => {
+    const root = page();
+    settingsView(root, user, "notifications");
+    await until(() => root.querySelector("input[name=incidentAlarm]"));
+    const names = [...sectionOf(root, "Alerts")!.querySelectorAll<HTMLInputElement>("input[role=switch]")].map((i) => i.name);
+    assert.deepEqual(names, ["notificationsEnabled", "alertOutages", "alertDeploys", "alertAccounts", "alertProviders", "incidentAlarm", "alertWarnings"]);
+    assert.equal(root.querySelectorAll(".setting-row--sub").length, 6);
+  });
+
+  test("Notifications: each kind of alert is a switch that saves, and greys out under Notify me", async () => {
+    const root = page();
+    settingsView(root, user, "notifications");
+    await until(() => sectionOf(root, "Alerts")?.querySelector("input[name=alertDeploys]"));
+    const box = root.querySelector<HTMLInputElement>("input[name=alertDeploys]")!;
+    assert.equal(box.checked, true);
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+    await until(() => !getSettings(db, user.id).alertDeploys);
+    assert.equal(getSettings(db, user.id).alertDeploys, false);
+    updateSettings(db, user.id, { alertDeploys: true, notificationsEnabled: false });
+    try {
+      const off = page();
+      settingsView(off, user, "notifications");
+      await until(() => off.querySelector("input[name=alertDeploys]"));
+      assert.equal(off.querySelector<HTMLInputElement>("input[name=alertDeploys]")!.disabled, true);
+    } finally {
+      updateSettings(db, user.id, { notificationsEnabled: true });
+    }
+  });
+
+  test("Notifications: alerts can be paused for a set time, says so, and can be resumed", async () => {
+    const root = page();
+    settingsView(root, user, "notifications");
+    await until(() => sectionOf(root, "Pause alerts")?.querySelector("select[name=pauseWhat]"));
+    [...sectionOf(root, "Pause alerts")!.querySelectorAll("button")].find((b) => b.textContent === "For 1 hour")!.click();
+    await until(() => /All alerts are paused until/.test(text(sectionOf(root, "Pause alerts"))));
+    assert.ok(Date.parse(getSettings(db, user.id).alertsPausedUntil) > Date.now());
+    assert.match(text(sectionOf(root, "Pause alerts")), /All alerts are paused until/);
+    [...sectionOf(root, "Pause alerts")!.querySelectorAll("button")].find((b) => b.textContent === "Resume")!.click();
+    await until(() => getSettings(db, user.id).alertsPausedUntil === "");
+    assert.equal(getSettings(db, user.id).alertsPausedUntil, "");
+  });
+
+  test("Data: says how long history is kept, and shortening it asks first", async () => {
+    const root = page();
+    settingsView(root, user, "data");
+    await until(() => sectionOf(root, "History")?.querySelector("select[name=checksKeptDays]"));
+    assert.match(text(sectionOf(root, "History")), /A summary of each day is kept for 365 days/);
+    updateSettings(db, user.id, { checksKeptDays: 90 });
+    const again = page();
+    settingsView(again, user, "data");
+    await until(() => again.querySelector("select[name=checksKeptDays]"));
+    const select = again.querySelector<HTMLSelectElement>("select[name=checksKeptDays]")!;
+    assert.equal(select.value, "90");
+    const asked: string[] = [];
+    const realConfirm = globalThis.confirm;
+    globalThis.confirm = (q) => (asked.push(String(q)), false);
+    select.value = "30";
+    select.dispatchEvent(new Event("change"));
+    globalThis.confirm = realConfirm;
+    assert.match(asked[0]!, /deleted/);
+    assert.equal(getSettings(db, user.id).checksKeptDays, 90, "declined: nothing changes");
+    updateSettings(db, user.id, { checksKeptDays: 30 });
+    const backups = backupsSection({ dir: "x", keep: 7, count: 0 } as BackupStatus, () => {});
+    assert.equal(backups.querySelector("a")?.getAttribute("href"), "https://periskopos.com/docs/app/backups");
+  });
+
   test("Notifications: the provider-incident alarm is a switch, off at first, and can be tried", async () => {
     const root = page();
     settingsView(root, user, "notifications");
-    await until(() => sectionOf(root, "Notifications")?.querySelector<HTMLInputElement>("input[name=incidentAlarm]"));
-    const box = sectionOf(root, "Notifications")!.querySelector<HTMLInputElement>("input[name=incidentAlarm]")!;
+    await until(() => sectionOf(root, "Alerts")?.querySelector<HTMLInputElement>("input[name=incidentAlarm]"));
+    const box = sectionOf(root, "Alerts")!.querySelector<HTMLInputElement>("input[name=incidentAlarm]")!;
     assert.equal(box.checked, false);
-    assert.match(text(sectionOf(root, "Notifications")), /Sound an alarm for provider incidents/);
+    assert.match(text(sectionOf(root, "Alerts")), /Sound an alarm for provider incidents/);
     box.checked = true;
     box.dispatchEvent(new Event("change"));
     // until() gives up quietly, so each wait is followed by what it waited for.
     await until(() => getSettings(db, user.id).incidentAlarm);
     assert.equal(getSettings(db, user.id).incidentAlarm, true, "switching it on is saved");
 
-    const tryIt = [...sectionOf(root, "Notifications")!.querySelectorAll("button")].find((b) => text(b) === "Test the alarm")!;
+    const tryIt = [...sectionOf(root, "Alerts")!.querySelectorAll("button")].find((b) => text(b) === "Test the alarm")!;
     tryIt.click();
-    await until(() => /Dismiss it to stop the sound/.test(text(sectionOf(root, "Notifications"))));
-    assert.match(text(sectionOf(root, "Notifications")), /Sent\. Dismiss it to stop the sound/);
+    await until(() => /Dismiss it to stop the sound/.test(text(sectionOf(root, "Alerts"))));
+    assert.match(text(sectionOf(root, "Alerts")), /Sent\. Dismiss it to stop the sound/);
     updateSettings(db, user.id, { incidentAlarm: false });
   });
 
@@ -450,11 +648,11 @@ describe("Settings, adding an app, the first run", () => {
     // In a browser tab (no shell): how it stands, and where to change it.
     const tab = page();
     settingsView(tab, user, "general");
-    await until(() => /tray/.test(text(sectionOf(tab, "Start at login"))));
-    assert.equal(isThere(sectionOf(tab, "Start at login")!.querySelector("input")), false);
-    assert.match(text(sectionOf(tab, "Start at login")), /tray/);
+    await until(() => /tray/.test(text(sectionOf(tab, "This app"))));
+    assert.equal(isThere(sectionOf(tab, "This app")!.querySelector("input")), false);
+    assert.match(text(sectionOf(tab, "This app")), /tray/);
 
-    // In the installed app: a checkbox, switched through the shell, showing what the shell says back.
+    // In the installed app: a switch, flipped through the shell, showing what the shell says back.
     let on = false;
     const asked: boolean[] = [];
     const shellBridge = {
@@ -471,8 +669,8 @@ describe("Settings, adding an app, the first run", () => {
     try {
       const root = page();
       settingsView(root, user, "general");
-      await until(() => sectionOf(root, "Start at login")?.querySelector("input[type=checkbox]"));
-      const box = () => sectionOf(root, "Start at login")!.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+      await until(() => sectionOf(root, "This app")?.querySelector("input[role=switch]"));
+      const box = () => sectionOf(root, "This app")!.querySelector<HTMLInputElement>("input[role=switch]")!;
       assert.equal(box().checked, false);
       box().checked = true;
       box().dispatchEvent(new Event("change"));
@@ -485,8 +683,8 @@ describe("Settings, adding an app, the first run", () => {
       shellBridge.getStartAtLogin = (handler) => handler({ available: false, enabled: false });
       const dev = page();
       settingsView(dev, user, "general");
-      await until(() => /tray/.test(text(sectionOf(dev, "Start at login"))));
-      assert.equal(isThere(sectionOf(dev, "Start at login")!.querySelector("input")), false);
+      await until(() => /tray/.test(text(sectionOf(dev, "This app"))));
+      assert.equal(isThere(sectionOf(dev, "This app")!.querySelector("input")), false);
     } finally {
       delete (globalThis as { periskoposShell?: unknown }).periskoposShell;
     }

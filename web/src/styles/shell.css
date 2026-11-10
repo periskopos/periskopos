@@ -107,6 +107,7 @@ body.is-desktop-shell .topbar {
 body.is-desktop-shell .topbar a,
 body.is-desktop-shell .notify,
 body.is-desktop-shell .update,
+body.is-desktop-shell .report-btn,
 body.is-desktop-shell .window-controls {
   -webkit-app-region: no-drag;
 }
@@ -116,8 +117,8 @@ body.is-darwin .topbar {
   padding-right: var(--layout-gutter);
 }
 
-/* The title bar's buttons at the right: notifications, updates, then the
-   window's own, flush in one row. Each opens a panel under it. */
+/* The title bar's buttons at the right: notifications, updates, reporting an
+   issue, then the window's own, flush in one row. The first two open a panel. */
 .notify,
 .update {
   position: relative;
@@ -126,7 +127,12 @@ body.is-darwin .topbar {
   align-self: stretch;
   margin-left: auto;
 }
+.report-btn {
+  flex: none;
+  align-self: stretch;
+}
 .topbar .notify ~ .update,
+.topbar .notify ~ .report-btn,
 .topbar .notify ~ .window-controls,
 .topbar .update ~ .window-controls {
   margin-left: calc(-1 * var(--topbar-gap));
@@ -166,6 +172,7 @@ body.is-darwin .topbar {
   box-shadow: 0 0 0 2px var(--color-bg-canvas);
 }
 .notify-panel,
+.pause-panel,
 .update-panel {
   position: absolute;
   top: calc(100% + var(--space-1));
@@ -185,6 +192,7 @@ body.is-darwin .topbar {
   cursor: default;
 }
 .notify-panel[hidden],
+.pause-panel[hidden],
 .update-panel[hidden] {
   display: none;
 }
@@ -323,7 +331,7 @@ body.is-darwin .topbar {
 }
 .window-controls-btn--close:hover {
   background: var(--color-status-down);
-  color: #fff;
+  color: var(--color-on-solid);
 }
 .window-controls-icon {
   display: flex;

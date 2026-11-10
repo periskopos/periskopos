@@ -7,6 +7,7 @@ import type { App, AppHistory, AppStatus, ConnectionDetails, SearchDetails, Traf
 import { mount } from "../web/src/dom.ts";
 import type { Child } from "../web/src/dom.ts";
 import { banner as bannerOf, header } from "../web/src/views/app/header.ts";
+import { pauseBanners, pauseControl } from "../web/src/views/app/pauseButton.ts";
 import { history } from "../web/src/views/app/history.ts";
 import { actionsTab, deploysTab, tabsOf, trafficTab } from "../web/src/views/app/tabs.ts";
 import { overview } from "../web/src/views/app/overview.ts";
@@ -120,6 +121,7 @@ const hist: AppHistory = {
   to: NOW,
   uptimePct: 100,
   watchedMin: 7000,
+  watched: [],
   incidents: [{ id: "i1", appId: "a_1", connectionId: "c_gh", kind: "ci", startedAt: ago(500), endedAt: ago(40), reason: "Cloudflare's build of star-map failed on 3de65c7" }],
   gaps: [],
   days: Array.from({ length: 30 }, (_, i) => ({ day: `2026-09-${String(i + 1).padStart(2, "0")}`, watchedMin: i < 20 ? 0 : 1440, incidents: 0, ...(i < 20 ? {} : { uptimePct: 100 }) })),
@@ -142,6 +144,8 @@ function page(over: Partial<AppPage> = {}): AppPage {
     details: details(),
     providers: [],
     protocolState: {},
+    pauseEdits: 0,
+    drawPause: () => undefined,
     activity: [],
     trafficRange: "week",
     searchRange: "week",
@@ -318,7 +322,7 @@ describe("every control has a name", () => {
       actions: draw(actionsTab(page({ tab: "actions" }))),
       history: draw(history(page({ tab: "history" }))),
       settings: draw(settingsTab(page({ tab: "settings" }), app)),
-      header: draw([header(page(), { ...app, icon: "/i.png" }, document.createElement("button"))]),
+      header: draw([header(page(), { ...app, icon: "/i.png" }, document.createElement("button"), document.createElement("div"))]),
     };
     // The "Check now" button is made by the page itself; here it's a stand-in.
     tabs.header.querySelector(".actions button")?.remove();
@@ -335,7 +339,7 @@ describe("every control has a name", () => {
 describe("the incident banner", () => {
   const banner = (reason: string) => {
     const incident = { id: "i2", appId: "a_1", connectionId: "c_gh", kind: "ci" as const, startedAt: ago(30), reason };
-    return text(draw([header(page(), app, document.createElement("button")), bannerOf(page({ status: { ...status, incident } }))]).querySelector(".banner"));
+    return text(draw([header(page(), app, document.createElement("button"), document.createElement("div")), bannerOf(page({ status: { ...status, incident } }))]).querySelector(".banner"));
   };
   test("says the kind only when the reason doesn't already", () => {
     assert.match(banner("CI failing on main"), /CI failing on main/, "the banner is drawn");
@@ -377,10 +381,10 @@ describe("History and Settings", () => {
   });
 
   test("the header: name, state, and the app's letter until it has an icon", () => {
-    const el = header(page(), app, document.createElement("button"));
+    const el = header(page(), app, document.createElement("button"), document.createElement("div"));
     assert.match(text(el), /Star-Map/);
     assert.equal(el.querySelector(".app-icon--letter")?.textContent, "S");
-    const withIcon = header(page(), { ...app, icon: "/api/apps/star-map/icon?v=1" }, document.createElement("button"));
+    const withIcon = header(page(), { ...app, icon: "/api/apps/star-map/icon?v=1" }, document.createElement("button"), document.createElement("div"));
     assert.equal(withIcon.querySelector("img.app-icon")?.getAttribute("src"), "/api/apps/star-map/icon?v=1");
   });
 });
@@ -463,7 +467,7 @@ describe("the app's tabs", () => {
   });
 
   test("back to the list is a button, above the name", () => {
-    const back = draw([header(page(), app, document.createElement("button"))]).querySelector("a.btn.back-button");
+    const back = draw([header(page(), app, document.createElement("button"), document.createElement("div"))]).querySelector("a.btn.back-button");
     assert.equal(back?.getAttribute("href"), "#/");
     assert.match(text(back), /All apps/);
   });
@@ -557,5 +561,62 @@ describe("Get more: a few named like the app", () => {
     root.querySelector<HTMLButtonElement>(".item-end button")!.click();
     await until(() => sent.length > 0);
     assert.deepEqual(sent, ["periskopos/periskopos"]);
+  });
+});
+
+describe("pausing an app from its page", () => {
+  const soon = () => new Date(Date.now() + 60 * 60_000).toISOString();
+  const over = () => new Date(Date.now() - 60_000).toISOString();
+  const pausing = (over: Partial<AppPage> = {}) => ({ app, apiBase: "/apps/shop", draw: () => undefined, drawPause: () => undefined, pauseEdits: 0, ...over }) as unknown as AppPage;
+
+  test("nothing is said while nothing is paused, or once a pause is over", () => {
+    assert.deepEqual(pauseBanners(pausing()), []);
+    assert.deepEqual(pauseBanners(pausing({ pause: {} })).filter(Boolean), []);
+    assert.deepEqual(pauseBanners(pausing({ pause: { app: over(), all: over() } })).filter(Boolean), []);
+  });
+
+  test("a running pause says until when, with the way out", () => {
+    const el = document.createElement("div");
+    mount(el, pauseBanners(pausing({ pause: { app: soon() } })));
+    assert.match(text(el), new RegExp(`${app.name}'s alerts are paused until`));
+    assert.equal(text(el.querySelector("button")), "Resume");
+  });
+
+  test("all alerts being paused says so, and points to where that's changed", () => {
+    const el = document.createElement("div");
+    mount(el, pauseBanners(pausing({ pause: { all: soon() } })));
+    assert.match(text(el), /All alerts are paused until/);
+    assert.equal(el.querySelector("a")?.getAttribute("href"), "#/settings/notifications");
+  });
+
+  test("the button opens the lengths, sends the one chosen, and closes", async () => {
+    const real = globalThis.fetch;
+    const sent: { url: string; body: { until: string } }[] = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      sent.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return new Response(JSON.stringify({ app: sent[0]!.body.until }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const page = pausing();
+      const control = pauseControl(page);
+      document.body.append(control.root);
+      const [button, ...lengths] = [...control.root.querySelectorAll("button")];
+      const panel = control.root.querySelector<HTMLElement>(".pause-panel")!;
+      assert.equal(text(button), "Pause alerts");
+      assert.equal(panel.hidden, true);
+      button!.click();
+      assert.equal(panel.hidden, false);
+      assert.deepEqual(lengths.map(text), ["For 1 hour", "For 4 hours", "Until tomorrow morning"]);
+      lengths[0]!.click();
+      await until(() => panel.hidden);
+      assert.match(sent[0]!.url, /\/api\/apps\/shop\/pause$/);
+      const minutes = (Date.parse(sent[0]!.body.until) - Date.now()) / 60_000;
+      assert.ok(minutes > 58 && minutes <= 60, `about an hour, not ${minutes}`);
+      assert.equal(page.pause?.app, sent[0]!.body.until);
+      control.destroy();
+      control.root.remove();
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 });

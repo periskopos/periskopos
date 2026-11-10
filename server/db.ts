@@ -301,7 +301,23 @@ function migrate(db: DatabaseSync) {
   }
 }
 
+// Inside another transaction this is a savepoint, so a caller can make several of them
+// one: if the outer one fails, the inner ones go with it.
+let savepoints = 0;
 export function transaction<T>(db: DatabaseSync, fn: () => T): T {
+  if (db.isTransaction) {
+    const name = `sp_${++savepoints}`;
+    db.exec(`SAVEPOINT ${name}`);
+    try {
+      const result = fn();
+      db.exec(`RELEASE ${name}`);
+      return result;
+    } catch (err) {
+      db.exec(`ROLLBACK TO ${name}`);
+      db.exec(`RELEASE ${name}`);
+      throw err;
+    }
+  }
   db.exec("BEGIN");
   try {
     const result = fn();

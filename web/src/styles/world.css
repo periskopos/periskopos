@@ -1,0 +1,1232 @@
+/* The World view: the picture fills the window, and everything else floats on it. */
+
+.page:has(.world-root) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  animation: none;
+}
+
+.world-root {
+  position: relative;
+  height: calc(100vh - var(--topbar-height));
+  overflow: hidden;
+  background: var(--color-bg-canvas);
+}
+
+.world-stage,
+.world-gl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.world-stage:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -4px;
+}
+.world-gl {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  animation: world-in 700ms var(--easing-default);
+}
+.world-gl.is-pointing {
+  cursor: pointer;
+}
+.world-gl.is-dragging {
+  cursor: grabbing;
+}
+@keyframes world-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Coming down through cloud as the page opens: see world/clouds.ts. Only transform and
+   opacity move, so it keeps going while the page is busy building the scene. Above the cards,
+   and never in the way of a click. */
+.world-clouds {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  overflow: hidden;
+  pointer-events: none;
+  --cloud-word: #33475c;
+  --cloud-word-back: rgb(255 255 255 / 0.65);
+}
+.world-clouds.is-dusk {
+  --cloud-word: #f4ecf0;
+  --cloud-word-back: rgb(35 42 85 / 0.6);
+}
+.world-clouds-sky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#6fa3d6, #c9d6df 75%);
+  transition: opacity 750ms var(--easing-default);
+}
+.is-dusk .world-clouds-sky {
+  background: linear-gradient(#232a55, #7a6478 75%);
+}
+.world-clouds-layers {
+  position: absolute;
+  inset: 0;
+  will-change: transform, opacity;
+  transition:
+    transform 1100ms cubic-bezier(0.5, 0, 0.9, 0.6),
+    opacity 1100ms ease-in;
+}
+.world-clouds-layer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  /* Wider than a tall window, not stretched or cut to it: the whole cloud fades before its edge. */
+  width: max(120%, 213vh);
+  height: auto;
+  will-change: transform, opacity;
+  animation:
+    world-cloud-nearer 4s cubic-bezier(0.55, 0.05, 0.9, 0.55) infinite,
+    world-cloud-seen 4s linear infinite;
+}
+@keyframes world-cloud-nearer {
+  from {
+    transform: scale(0.55);
+  }
+  to {
+    transform: scale(3);
+  }
+}
+@keyframes world-cloud-seen {
+  0% {
+    opacity: 0;
+  }
+  25%,
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.world-clouds-word {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--cloud-word);
+  background: var(--cloud-word-back);
+  font-size: var(--font-size-sm, 13px);
+  letter-spacing: 0.02em;
+  transition: opacity 200ms linear;
+  /* Not on a quick opening: only once it's been a moment. */
+  animation: world-clouds-word-in 400ms linear 900ms backwards;
+}
+@keyframes world-clouds-word-in {
+  from {
+    opacity: 0;
+  }
+}
+.world-clouds.is-lifting .world-clouds-sky,
+.world-clouds.is-lifting .world-clouds-word {
+  opacity: 0;
+}
+.world-clouds.is-lifting .world-clouds-layers {
+  transform: scale(1.9);
+  opacity: 0;
+}
+
+/* Floating cards: glass over the picture, readable on any land. */
+.world-card {
+  position: absolute;
+  z-index: 2;
+  background: color-mix(in srgb, var(--color-bg-surface) 86%, transparent);
+  border: var(--border-width) solid color-mix(in srgb, var(--color-border-strong) 45%, transparent);
+  border-radius: 14px;
+  box-shadow: var(--shadow-over-map);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+/* The title and the figures, in a row across the top. */
+.world-top {
+  position: absolute;
+  z-index: 2;
+  top: var(--space-4);
+  left: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.world-top > * {
+  position: relative;
+  pointer-events: auto;
+}
+@media (min-width: 901px) {
+  .world-root:has(.world-detail:not([hidden])) .world-top {
+    right: 360px;
+  }
+}
+/* What needs saying, stacked under the title in the flow, so nothing lands on anything. */
+.world-top > .world-notes {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.world-notes > * {
+  pointer-events: auto;
+}
+.world-eyebrow {
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.world-stats {
+  display: flex;
+  flex-wrap: wrap; /* beside the panel, there may be no room for them all in a line */
+  align-items: stretch;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--space-1);
+}
+/* Each lines up from the top, with or without a note under it. */
+.world-stat {
+  display: block;
+  min-width: 96px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md, 8px);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.world-stat {
+  cursor: pointer;
+  transition: background-color 120ms var(--easing-default);
+}
+button.world-stat:hover {
+  background: var(--color-bg-raised);
+}
+button.world-stat:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+.world-stat > span {
+  display: block;
+}
+.world-stats[hidden] {
+  display: none;
+}
+/* All's well: the figures step back to a quiet line, label beside value, and come forward
+   again the moment something needs a look. Running keeps its note: "1 not live yet" explains
+   a 4 of 5. */
+.world-stats--calm {
+  align-self: flex-start; /* as tall as its one line, not as the title beside it */
+  padding: 2px var(--space-1);
+  background: color-mix(in srgb, var(--color-bg-surface) 70%, transparent);
+}
+.world-stats--calm .world-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+}
+.world-stats--calm .world-stat-value {
+  font-size: var(--font-size-sm, 0.875rem);
+}
+.world-stats--calm .world-stat:not(:first-child) .world-stat-note {
+  display: none;
+}
+/* Only where the figures' card has no room. */
+.world-brief {
+  display: none;
+  margin: 2px 0 0;
+}
+.world-stat-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.world-stat-value {
+  font-size: var(--font-size-lg, 1.125rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.world-stat-note {
+  max-width: 200px;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+}
+.world-title h1 {
+  font-size: var(--font-size-lg, 1.125rem);
+}
+
+.world-notice {
+  max-width: 460px;
+}
+.world-notice:empty {
+  display: none;
+}
+
+.world-detail {
+  top: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 308px;
+  max-height: calc(100% - 2 * var(--space-4) - 52px); /* clear of the zoom buttons */
+  padding: var(--space-4);
+  overflow-y: auto;
+  animation: world-card-in 220ms var(--easing-default);
+}
+.world-detail[hidden] {
+  display: none;
+}
+.world-detail > * {
+  flex-shrink: 0; /* it scrolls: nothing in it gets squeezed instead */
+}
+.world-detail > .btn {
+  align-self: flex-start;
+}
+@keyframes world-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+
+.world-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.world-close {
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.world-close:hover {
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
+}
+
+.world-legend {
+  max-width: 340px;
+  max-height: 100%;
+  padding: var(--space-2) var(--space-3);
+  overflow-y: auto;
+  font-size: var(--font-size-sm, 0.875rem);
+}
+.world-legend p {
+  margin-top: var(--space-2);
+}
+.world-legend[open] > summary {
+  position: sticky;
+  z-index: 1;
+  top: calc(-1 * var(--space-2));
+  padding-block: var(--space-1);
+  background: var(--color-bg-surface);
+}
+/* Open, it's what's being read: over the title, not under it. */
+.world-legend[open] {
+  z-index: 3;
+}
+.world-legend > summary {
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+/* The key, grouped: what's on the map now lit up and taking you to it, the rest quieter.
+   How to read the map is behind the round "?" beside the hint. */
+.world-legend-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.world-legend .world-legend-lead {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+.world-legend .world-legend-note {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--color-border-focus);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--color-bg-raised) 70%, transparent);
+}
+.world-legend-about {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: 50%;
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.world-legend-about:hover {
+  border-color: var(--color-border-focus);
+}
+.world-legend-about:focus-visible,
+.world-legend-row:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
+}
+.world-legend-group h3 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.world-legend[open] .world-legend-group ul {
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.world-legend .world-legend-group li {
+  display: block;
+}
+.world-legend-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.world-legend-row > .lamp {
+  margin-top: 0.3em;
+}
+button.world-legend-row {
+  background: color-mix(in srgb, var(--color-bg-raised) 70%, transparent);
+  cursor: pointer;
+}
+button.world-legend-row:hover {
+  background: var(--color-bg-raised);
+}
+.world-legend-row.is-absent {
+  opacity: 0.6;
+}
+.world-legend-text {
+  min-width: 0;
+}
+.world-legend-word {
+  display: block;
+  font-weight: 600;
+}
+.world-legend-seen {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.world-legend-count {
+  align-self: center;
+  max-width: 110px;
+  overflow: hidden;
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  background: var(--color-bg-surface);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* How to read the map: a window of its own, read once. */
+dialog.world-about {
+  max-height: min(84vh, 680px);
+  overflow-y: auto;
+}
+.world-about-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.world-about h2 {
+  margin: 0;
+}
+.world-about h3 {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+.world-about p {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+}
+.world-about .actions {
+  margin-top: var(--space-5);
+}
+.world-legend ul,
+.world-tower-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.world-tower-word {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+.world-radar {
+  display: block;
+  width: 100%;
+  max-width: 256px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  flex: none;
+}
+.world-radar.is-pointing {
+  cursor: pointer;
+}
+.world-radar-note {
+  min-height: 2.6em;
+  margin: 0;
+  text-align: center;
+}
+.world-log-title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+}
+.world-log-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.world-log-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: baseline;
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--color-border-subtle, var(--color-border-strong));
+}
+.world-log-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: 24px;
+  color: inherit;
+  text-decoration: none;
+}
+.world-log-row:hover .world-log-name {
+  text-decoration: underline;
+}
+/* Wrapped, not cut: a log's what it found is the point of it. */
+.world-log-name,
+.world-log-result {
+  overflow-wrap: anywhere;
+}
+.world-log-what {
+  margin-left: var(--space-1);
+  color: var(--color-text-secondary);
+}
+.world-log-result,
+.world-log-time {
+  color: var(--color-text-secondary);
+  font-size: 0.85em;
+}
+.world-apps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.world-apps a {
+  display: inline-block;
+  min-height: 24px;
+  line-height: 24px;
+}
+.world-legend[open] {
+  padding-bottom: var(--space-3);
+}
+
+.world-stage-news {
+  position: relative;
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  width: min(420px, calc(100% - 2 * var(--space-4)));
+  padding: var(--space-3) var(--space-4);
+  animation: world-stage-news-in 420ms var(--easing-default);
+}
+.world-stage-news[hidden] {
+  display: none;
+}
+/* What happened while you were away: a row an app, each taking you to it. */
+.world-since-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.world-since-body > .meta {
+  margin: 0;
+}
+.world-since-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.world-since-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 24px;
+  margin: 0 calc(-1 * var(--space-1));
+  padding: 2px var(--space-1);
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+button.world-since-row {
+  cursor: pointer;
+}
+button.world-since-row:hover {
+  background: var(--color-bg-raised);
+}
+button.world-since-row:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
+}
+@keyframes world-stage-news-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+/* The bottom left corner: stacked in the flow, so however much any of it says, nothing lands
+   on anything. It stops short of the cards along the top, and the row keeps clear of the map's
+   buttons, which share its line: world/hudRoom.ts measures both. */
+.world-corner {
+  position: absolute;
+  top: calc(var(--space-4) + var(--world-top-h, 0px) + var(--space-2));
+  right: var(--space-4);
+  bottom: var(--space-4);
+  left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.world-corner-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-height: 0;
+  max-width: calc(100% - var(--world-controls-w, 394px) - var(--space-2));
+}
+.world-corner .world-card {
+  position: relative;
+  pointer-events: auto;
+}
+.world-corner-row:has(.world-legend[open]) {
+  flex: 1 1 0;
+  max-width: 100%;
+}
+.world-legend {
+  flex: none;
+}
+.world-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  font-size: var(--font-size-sm, 0.875rem);
+}
+/* A replay is about then: like the figures, the key is about now. */
+.world-key[hidden],
+.world-legend[open] ~ .world-key,
+.world-root:has(.world-replay:not([hidden])) .world-key {
+  display: none;
+}
+.world-key li {
+  display: flex;
+}
+/* Each status goes to what has it, so it's a button: quiet until pointed at. */
+.world-key button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 24px;
+  margin: 0 calc(-1 * var(--space-1));
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.world-key button:hover {
+  background: var(--color-bg-raised);
+}
+.world-key button:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
+}
+/* Reached by keyboard, what a status means shows over the key, as a tooltip would to a pointer. */
+.world-key button:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 4;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-over-map);
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+}
+.world-key-count {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.world-feed {
+  width: 320px;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-2) var(--space-1);
+}
+.world-feed[hidden] {
+  display: none;
+}
+.world-corner:has(.world-legend[open]) .world-feed {
+  display: none;
+}
+.world-feed-title {
+  margin: 0;
+  padding: 2px var(--space-2) var(--space-1);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold, 600);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.world-feed-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.world-feed-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 5px var(--space-2);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.world-feed-row:hover {
+  background: var(--color-bg-raised);
+}
+.world-feed-text {
+  flex: 1;
+  min-width: 0;
+}
+.world-feed-when {
+  flex: none;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.world-stage.is-past .world-gl {
+  filter: saturate(0.55) brightness(0.92);
+  transition: filter 300ms var(--easing-default);
+}
+.world-replay {
+  bottom: 60px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: min(640px, calc(100% - 2 * var(--space-4)));
+  padding: var(--space-2) var(--space-3);
+  transform: translateX(-50%);
+}
+.world-replay[hidden] {
+  display: none;
+}
+.world-replay-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding-top: 8px;
+}
+.world-replay-marks {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-bg-raised);
+  overflow: hidden;
+}
+.world-replay-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+}
+.world-replay-mark--gap {
+  background: var(--color-status-unknown);
+  opacity: 0.45;
+}
+.world-replay-mark--down {
+  background: var(--color-status-down);
+}
+.world-replay-mark--attention {
+  background: var(--color-status-attention);
+}
+.world-replay-slider {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+.world-replay-when {
+  flex: none;
+  min-width: 72px;
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-zoom {
+  position: absolute;
+  z-index: 2;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  gap: var(--space-1);
+}
+.world-zoom .btn {
+  background: color-mix(in srgb, var(--color-bg-surface) 86%, transparent);
+  box-shadow: var(--shadow-over-map-sm);
+  backdrop-filter: blur(14px);
+}
+/* On a card of its own: over the map, plain text can't be read. */
+.world-retry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  width: fit-content;
+  max-width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+  border: var(--border-width) solid color-mix(in srgb, var(--color-border-strong) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-bg-surface) 90%, transparent);
+  box-shadow: var(--shadow-over-map);
+  backdrop-filter: blur(14px);
+}
+.world-retry .meta {
+  margin: 0;
+}
+/* At the end of its range: still focusable, plainly doing nothing. */
+.world-zoom .btn[aria-disabled="true"] {
+  color: var(--color-text-secondary);
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+.world-settings {
+  position: relative;
+  display: flex;
+}
+/* Open, it's what's being read: over the cards, not under them. */
+.world-zoom:has(.world-settings-panel:not([hidden])) {
+  z-index: 4;
+}
+.world-settings-button {
+  padding-inline: var(--space-2);
+}
+.world-settings-panel {
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(280px, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-3);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+.world-settings-panel[hidden] {
+  display: none;
+}
+.world-settings-title {
+  font-weight: 600;
+}
+.world-settings-panel fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.world-settings-panel legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  color: var(--color-text-secondary);
+}
+.world-settings-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.world-settings-choice:hover {
+  background: color-mix(in srgb, var(--color-text-primary) 7%, transparent);
+}
+.world-settings-choice input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+}
+.world-settings-choice > span {
+  display: flex;
+  flex-direction: column;
+}
+.world-settings-label {
+  color: var(--color-text-primary);
+}
+
+/* Below the dish, between the corner and the map's buttons. */
+.world-empty {
+  position: absolute;
+  z-index: 2;
+  bottom: 72px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.world-empty > * {
+  pointer-events: auto;
+}
+.world-empty:empty {
+  display: none;
+}
+.world-empty-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+}
+
+/* Labels: small tags that stand over each building. */
+.world-labels {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.world-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-bg-surface) 90%, transparent);
+  border: var(--border-width) solid color-mix(in srgb, var(--color-border-strong) 40%, transparent);
+  border-radius: 999px;
+  box-shadow: var(--shadow-over-map-sm);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 180ms var(--easing-default), visibility 180ms;
+  will-change: transform;
+}
+.world-label.is-shown {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.world-label:hover,
+.world-label.is-pointed-at {
+  z-index: 2;
+  border-color: var(--color-border-focus);
+}
+.world-label.is-changed {
+  z-index: 3;
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
+  animation: world-label-changed 1.3s ease-out 4;
+}
+@keyframes world-label-changed {
+  50% {
+    outline-offset: 6px;
+    outline-color: transparent;
+  }
+}
+.world-labels.is-dense .world-label:not(.is-pointed-at, .is-changed, .world-label--down) .world-label-note {
+  display: none;
+}
+.world-label-text {
+  display: flex;
+  flex-direction: column;
+}
+.world-label-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--font-weight-semibold, 600);
+}
+.world-label-note {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.world-label--down {
+  border-color: var(--color-status-down);
+}
+.world-label--down .world-label-note {
+  color: var(--color-status-down);
+}
+.world-label--attention {
+  border-color: var(--color-status-attention);
+}
+.world-label--attention .world-label-note {
+  color: var(--color-status-attention);
+}
+.world-label--info .world-label-note {
+  color: var(--color-status-info);
+}
+.world-label--provider:not(.is-pointed-at) .world-label-name {
+  font-weight: var(--font-weight-regular, 400);
+  color: var(--color-text-secondary);
+}
+
+/* Past this the title has the top to itself: the row would cover the map. */
+@media (max-width: 900px) {
+  .world-stats {
+    display: none;
+  }
+  .world-brief:not([hidden]) {
+    display: block;
+  }
+}
+@media (max-width: 900px) {
+  .world-top {
+    top: var(--space-2);
+    left: var(--space-2);
+    right: var(--space-2);
+  }
+  .world-title {
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+  .world-detail {
+    z-index: 3;
+    top: auto;
+    right: var(--space-2);
+    bottom: 52px; /* the zoom buttons stay in reach under it */
+    left: var(--space-2);
+    width: auto;
+    max-height: 55%;
+  }
+  /* No room for both: the panel was asked for. */
+  .world-root:has(.world-detail:not([hidden])) .world-corner {
+    display: none;
+  }
+  /* Nor for the bar: closing the panel brings it back. */
+  .world-root:has(.world-detail:not([hidden])) .world-replay {
+    display: none;
+  }
+  .world-corner {
+    top: calc(var(--space-2) + var(--world-top-h, 0px) + var(--space-2));
+    right: var(--space-2);
+    bottom: var(--space-2);
+    left: var(--space-2);
+  }
+  .world-zoom {
+    right: var(--space-2);
+    bottom: var(--space-2);
+  }
+  .world-feed-rows li:nth-child(n + 3) {
+    display: none;
+  }
+  .world-replay {
+    bottom: 100px; /* above the corner, which is above the buttons */
+    width: calc(100% - 2 * var(--space-2));
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .world-replay-track {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .world-title .btn {
+    display: none;
+  }
+  .world-title h1 {
+    font-size: 0.875rem;
+  }
+  .world-zoom .btn {
+    padding-inline: var(--space-2);
+  }
+}
+
+/* Too narrow to share a line with the map's buttons: the corner stands above them. */
+@media (max-width: 900px) {
+  .world-corner {
+    bottom: 56px;
+  }
+  .world-corner-row {
+    max-width: 100%;
+  }
+}
+
+/* No room between them: under the title, where the corner never reaches. */
+@media (max-width: 900px) {
+  .world-empty {
+    top: calc(var(--space-2) + var(--world-top-h, 0px) + var(--space-2));
+    bottom: auto;
+  }
+}
+/* The legend open reaches right across here. */
+@media (max-width: 1000px) {
+  .world-root:has(.world-legend[open]) .world-empty {
+    display: none;
+  }
+}
+
+/* A short window: the map comes first, and the bell and the legend still say it. */
+@media (max-height: 620px) {
+  .world-feed {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-gl,
+  .world-stage-news,
+  .world-detail,
+  .world-clouds-layer,
+  .world-clouds-word {
+    animation: none;
+  }
+  /* Still cloud that fades: nothing rushes past. */
+  .world-clouds-layers,
+  .world-clouds-sky {
+    transition: opacity 300ms linear;
+  }
+  .world-clouds.is-lifting .world-clouds-layers {
+    transform: none;
+  }
+  .world-stage.is-past .world-gl {
+    transition: none;
+  }
+  .world-label {
+    transition: none;
+  }
+  .world-label.is-changed {
+    animation: none;
+  }
+}

@@ -36,7 +36,7 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostics
-      description: "Help → Report an issue (the ☰ button at the top right, or Alt, on Windows and Linux) copies them for you (or Settings → Data → Copy diagnostics): the version, the system, what kinds of accounts are connected, recent problems and crashes. Keys, addresses and app names are taken out."
+      description: "The bug button at the top right, or Help → Report an issue (the ☰ button, or Alt, on Windows and Linux), copies them for you (or Settings → Data → Copy diagnostics): the version, the system, what kinds of accounts are connected, recent problems and crashes. Keys, addresses and app names are taken out."
       render: text
   - type: textarea
     id: log

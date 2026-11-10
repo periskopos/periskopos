@@ -38,7 +38,7 @@ describe("the bridge to the page (preload)", () => {
   test("the preload exposes the bridge under the one name the page looks for", () => {
     const exposed: Record<string, unknown>[] = [];
     const sandbox = {
-      require: () => ({ contextBridge: { exposeInMainWorld: (name: string, api: Record<string, unknown>) => exposed.push({ name, ...api }) }, ipcRenderer: {} }),
+      require: () => ({ contextBridge: { exposeInMainWorld: (name: string, api: Record<string, unknown>) => exposed.push({ name, ...api }) }, ipcRenderer: { on: () => {} } }),
       process: { platform: "win32" },
     };
     vm.runInNewContext(preloadSource(), sandbox);
@@ -95,6 +95,10 @@ describe("periskopos:// links", () => {
     assert.equal(parseDeepLink("periskopos://apps"), "#/", "the page's new name works too");
     assert.equal(parseDeepLink("periskopos://services"), "#/services");
     assert.equal(parseDeepLink("periskopos://status"), "#/status");
+    assert.equal(parseDeepLink("periskopos://world"), "#/world");
+    assert.equal(parseDeepLink("periskopos://world/star-map"), "#/world/star-map");
+    assert.equal(parseDeepLink("periskopos://world/star-map/more"), undefined);
+    assert.equal(parseDeepLink("periskopos://world/..%2Fsettings"), undefined);
     assert.equal(parseDeepLink("periskopos://apps/star-map/deploys"), "#/apps/star-map/deploys");
     assert.equal(parseDeepLink("periskopos://apps/star-map/settings/connections"), "#/apps/star-map/settings/connections");
     assert.equal(parseDeepLink("periskopos://apps/star-map/settings/nonsense"), undefined);

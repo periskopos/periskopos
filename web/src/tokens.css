@@ -54,6 +54,18 @@
   --color-status-info-tint: #0d1d33;
   --color-status-unknown: #8b949e;
   --color-status-unknown-tint: #161a1f;
+  /* The World's lamps, screens and vans: lights in a scene, not words on a page, so the same
+     bright hues in both themes. The light theme's darker status colours read as dull, and its
+     amber as brown, on a sunlit map. Not overridden for the light theme. */
+  --color-world-up: #3fb950;
+  --color-world-down: #ff6b61;
+  --color-world-attention: #f0883e;
+  --color-world-info: #58a6ff;
+  --color-world-unknown: #8b949e;
+  /* A mark on a solid fill (a toggle's knob, the close button's × on red): white in both themes. */
+  --color-on-solid: #ffffff;
+  /* The page dimmed behind a tour stop. */
+  --color-scrim: rgb(0 0 0 / 0.65);
 
   /* ── Type ───────────────────────────────────────────────────────────── */
   --font-family-body: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -101,6 +113,10 @@
   /* ── Depth: dark relies on borders, not shadows ─────────────────────── */
   --shadow-sm: none;
   --shadow-md: 0 8px 24px rgb(0 0 0 / 0.45);
+  /* Cards and controls floating over the World's map, which is bright in both themes, so they
+     lift by a shadow there even in dark. Not overridden for the light theme. */
+  --shadow-over-map: 0 10px 30px rgb(0 0 0 / 26%);
+  --shadow-over-map-sm: 0 4px 12px rgb(0 0 0 / 28%);
   --focus-ring: 0 0 0 2px var(--color-bg-canvas), 0 0 0 4px var(--color-border-focus);
 
   /* ── Motion: feedback and arrivals (styles/motion.css) ──────────────── */

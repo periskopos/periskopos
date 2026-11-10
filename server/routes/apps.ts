@@ -1,13 +1,23 @@
+import { pauseProblem } from "../alerts/rules.ts";
 import { badRequest, HttpError } from "../errors.ts";
 import * as history from "../history.ts";
 import { protocolSecretRef } from "../protocol.ts";
 import { removeSecret } from "../keys/secrets.ts";
+import { dropHeldAlerts, getSettings, updateSettings } from "../settings.ts";
+import type { AppPause, Settings } from "../../shared/types.ts";
 import * as store from "../store.ts";
 import { suggestionsFor } from "../suggestions.ts";
 import { httpUrl, requiredText, text } from "../validate.ts";
 import { settleLiveChecks } from "../watcher.ts";
 import { findApp, jsonBody, router, visible } from "./context.ts";
 import type { RouteDeps } from "./context.ts";
+
+const running = (until: string | undefined) => (until && Date.parse(until) > Date.now() ? until : undefined);
+const pauseOf = (settings: Settings, appId: string): AppPause => {
+  const app = running(settings.appPauses[appId]);
+  const all = running(settings.alertsPausedUntil);
+  return { ...(app ? { app } : {}), ...(all ? { all } : {}) };
+};
 
 // Apps (FR-A1–A7): add, edit, remove; their icon, history, and what my
 // accounts could still add to them.
@@ -23,6 +33,7 @@ export function appRoutes({ db, watcher, icons }: RouteDeps) {
       url: httpUrl(body.url, "URL"),
       notes: text(body.notes, "Notes", { max: 2000, optional: true }),
       live: liveFlag(body.live) ?? true,
+      checkIntervalMin: getSettings(db, c.var.user.id).defaultCheckIntervalMin,
     });
     void icons?.refresh(app).catch((err) => console.error(`Icon refresh failed: ${(err as Error).message}`));
     return c.json({ app }, 201);
@@ -59,7 +70,10 @@ export function appRoutes({ db, watcher, icons }: RouteDeps) {
         ? { checkIntervalMin: checkInterval(body.checkIntervalMin) }
         : {}),
     });
-    if (app.live && !updated.live) settleLiveChecks(db, updated);
+    if (app.live && !updated.live) {
+      settleLiveChecks(db, updated);
+      dropHeldAlerts(db, c.var.user.id, app.id);
+    }
     // Launched: look at the site now rather than at the next check.
     if (!app.live && updated.live) void watcher.checkApp(updated).catch((err) => console.error(`First check failed: ${(err as Error).message}`));
     // A new URL, or just launched: its icon, if it's due.
@@ -67,9 +81,34 @@ export function appRoutes({ db, watcher, icons }: RouteDeps) {
     return c.json({ app: updated });
   });
 
+  // This app's pause, from its own page: what's running, and setting or
+  // ending it. Only this app's entry changes. (An assistant can read this, but
+  // security.ts doesn't let it set one.)
+  r.get("/apps/:slug/pause", (c) => {
+    const app = findApp(db, c);
+    return c.json(pauseOf(getSettings(db, c.var.user.id), app.id));
+  });
+
+  r.post("/apps/:slug/pause", async (c) => {
+    const app = findApp(db, c);
+    const body = await jsonBody(c);
+    const { appPauses } = getSettings(db, c.var.user.id);
+    const rest = Object.fromEntries(Object.entries(appPauses).filter(([id]) => id !== app.id));
+    if (body.until !== "") {
+      const problem = pauseProblem(body.until, Date.now());
+      if (problem) throw badRequest(problem);
+      rest[app.id] = String(body.until);
+    }
+    return c.json(pauseOf(updateSettings(db, c.var.user.id, { appPauses: rest }), app.id));
+  });
+
   r.delete("/apps/:slug", (c) => {
     const app = findApp(db, c);
     store.deleteApp(db, app);
+    // Its pause goes too: the list is sent back whole, and only my apps are allowed in it.
+    const { appPauses } = getSettings(db, c.var.user.id);
+    if (appPauses[app.id]) updateSettings(db, c.var.user.id, { appPauses: Object.fromEntries(Object.entries(appPauses).filter(([id]) => id !== app.id)) });
+    dropHeldAlerts(db, c.var.user.id, app.id);
     // Its protocol secret goes with it: a new app of the same name would
     // otherwise find it and talk to its endpoint with the old app's secret.
     const stillUsed = new Set(store.listApps(db, c.var.user.id).flatMap((a) => [a.protocol?.secretRef, protocolSecretRef(a.slug)]));

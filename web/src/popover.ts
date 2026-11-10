@@ -4,7 +4,7 @@
 // and says so to screen readers (aria-expanded). The first control in the
 // panel gets focus.
 
-export type Popover = { isOpen: () => boolean; open: () => void; close: (returnFocus?: boolean) => void };
+export type Popover = { isOpen: () => boolean; open: () => void; close: (returnFocus?: boolean) => void; destroy: () => void };
 
 export function popover(root: HTMLElement, button: HTMLButtonElement, panel: HTMLElement, onOpen?: () => void): Popover {
   button.setAttribute("aria-expanded", "false");
@@ -28,14 +28,21 @@ export function popover(root: HTMLElement, button: HTMLButtonElement, panel: HTM
   button.addEventListener("click", () => (isOpen() ? close() : open()));
   // Heard anywhere while it's open: a redraw of the panel can take focus
   // with it (its button gone, say), and Escape must still close it.
-  document.addEventListener("keydown", (e) => {
+  const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape" && isOpen()) {
       e.stopPropagation();
       close(true);
     }
-  });
-  document.addEventListener("click", (e) => {
+  };
+  const onClick = (e: MouseEvent) => {
     if (isOpen() && !root.contains(e.target as Node)) close();
-  });
-  return { isOpen, open, close };
+  };
+  document.addEventListener("keydown", onKey);
+  document.addEventListener("click", onClick);
+  // For one that goes away with its page, rather than living in the title bar.
+  const destroy = () => {
+    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("click", onClick);
+  };
+  return { isOpen, open, close, destroy };
 }

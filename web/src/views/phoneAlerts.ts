@@ -1,6 +1,7 @@
 import type { Settings } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
+import { inputRow } from "../settingRows.ts";
 import { busyButton, errorBox, ext, field, lamp, section, submitting, toast } from "../ui.ts";
 
 // Settings → Phone alerts (the landscape notes §5.1): the same notifications,
@@ -131,8 +132,8 @@ export function phoneAlertsSection(
 
   return section("Phone alerts", {
     body: [
-      h("p", { class: "secondary" }, "The same alerts as the desktop notifications (an app going down and coming back, failed deploys and CI, expiries, provider incidents, an AI assistant asking to act), also sent to your phone. Only the alert's text leaves this computer. They follow Notify me above, and only go out while Periskopos is running."),
-      field("Send them with", channel),
+      h("p", { class: "secondary" }, "The same alerts as the desktop notifications (an app going down and coming back, failed deploys and CI, expiries, provider incidents, an AI assistant asking to act), also sent to your phone. Only the alert's text leaves this computer. They follow your choices above, including a pause, except an AI assistant asking to act, which always tells you. They only go out while Periskopos is running."),
+      inputRow("Send them with", null, channel),
       channelBody,
       settings.phoneChannel !== "off" &&
         h(

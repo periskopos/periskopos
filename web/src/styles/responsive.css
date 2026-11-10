@@ -15,8 +15,20 @@
   .btn--sm {
     padding: 0 var(--space-4);
   }
-  input:not([type="checkbox"]),
+  input:not([type="checkbox"], [type="radio"]),
   select {
+    min-height: 44px;
+  }
+  option {
+    min-height: 44px;
+  }
+  .segmented-option span {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  /* The whole row is the switch's label, so it's as easy to hit as any. */
+  .setting-row--toggle {
     min-height: 44px;
   }
 }
@@ -25,6 +37,18 @@
 
 /* By the page's own width (about a 1024px window at 16px text), so the
    columns fold where the page runs out of room, whatever the text size. */
+/* The list gives up its least urgent columns first, so the App column keeps
+   room for the name and what's wrong. */
+@container page (max-width: 76rem) {
+  .board .col-numbers {
+    display: none;
+  }
+}
+@container page (max-width: 44rem) {
+  .board .col-response {
+    display: none;
+  }
+}
 @container page (max-width: 60rem) {
   /* An app's Settings menu: a row of buttons above the part. */
   .settings-layout {
@@ -56,8 +80,15 @@
     border-top: var(--border-width) solid var(--color-border-subtle);
   }
   .board .col-checked,
-  .board .col-uptime,
-  .board .col-numbers {
+  .board .col-uptime {
+    display: none;
+  }
+}
+
+/* Rarely needed, and the title bar has to fit: Help and Settings → About still have it. Goes
+   before the rest of the phone layout, as the bar runs out of room a little before that does. */
+@media (max-width: 640px) {
+  .report-btn {
     display: none;
   }
 }
@@ -123,6 +154,7 @@
   /* The title bar's panels can't hang off a button here: they'd run off
      the left edge. They span the window instead, under the title bar. */
   .notify-panel,
+  .pause-control .pause-panel,
   .update-panel {
     position: fixed;
     top: calc(var(--topbar-height) + var(--space-1));

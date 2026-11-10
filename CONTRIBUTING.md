@@ -81,6 +81,13 @@ The project is pure TypeScript: no JavaScript source, no explicit `any`, no
 `@ts-ignore`, and a strict compiler. A test (`test/purity.test.ts`) fails if
 any of that slips back in. CSS and HTML are the only other languages.
 
+## One look
+
+Screens are built from the design system in [docs/DESIGN.md](docs/DESIGN.md):
+tokens from `web/src/tokens.css`, never raw colours, and the shared components
+before new CSS. A test (`test/design-tokens.test.ts`) fails on a raw colour
+outside its named exceptions, or a token that isn't defined.
+
 ## What's welcome
 
 - **New hosts and providers.** Each integration lives in

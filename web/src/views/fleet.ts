@@ -1,13 +1,15 @@
 import { mainSite } from "../../../shared/catalog.ts";
 import { duration } from "../../../shared/format.ts";
-import type { App, AppMetric, AppStatus, NotificationItem, NotificationsView, User } from "../../../shared/types.ts";
+import type { App, AppMetric, AppStatus, NotificationItem, NotificationsView, UptimeDay, User } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { h, mount } from "../dom.ts";
 import { STATE_LABEL, STATE_RANK, formatPct, formatUptime, hostOf, shortSha } from "../format.ts";
 import type { ShownState } from "../format.ts";
 import { attentionCount, attentionSection } from "./attention.ts";
+import { barClass, dayTip } from "./app/history.ts";
 import type { ProviderStatus } from "../../../shared/types.ts";
-import { providersRead, summarize } from "../../../shared/fleet.ts";
+import { daysSummary, providersRead, summarize } from "../../../shared/fleet.ts";
+import { overallLine } from "../../../shared/world.ts";
 import { PUSH, appIcon, busyButton, errorBox, lamp, refreshNotifications, shell, status, timeAgo } from "../ui.ts";
 
 const REFRESH_MS = 60_000;
@@ -28,6 +30,7 @@ function savedLayout(): Layout {
 export function fleetView(root: Element, user: User): () => void {
   let apps: App[] | undefined;
   let statuses = new Map<string, AppStatus>();
+  let days: Record<string, UptimeDay[]> = {};
   let error: unknown;
   let lastLoaded: string | undefined;
   let providers: ProviderStatus[] = [];
@@ -70,7 +73,7 @@ export function fleetView(root: Element, user: User): () => void {
         "div",
         { class: "page-header" },
         h("div", null, headline, sub),
-        h("div", { class: "actions" }, layoutSwitch, checkNow, h("a", { class: "btn btn--primary", href: "#/apps/new" }, "Add app")),
+        h("div", { class: "actions" }, layoutSwitch, h("a", { class: "btn", href: "#/world" }, "World"), checkNow, h("a", { class: "btn btn--primary", href: "#/apps/new" }, "Add app")),
       ),
       strip,
       board,
@@ -108,12 +111,12 @@ export function fleetView(root: Element, user: User): () => void {
     }
 
     const all = apps.map((a) => statuses.get(a.slug)).filter((s): s is AppStatus => Boolean(s));
-    const { state, text } = summarize(all);
+    const { state, text } = overallLine(summarize(all), providers, Date.now());
     const everyoneChecked = all.length === apps.length;
     mount(
       headline,
       lamp(everyoneChecked ? state : "checking", { large: true }),
-      h("h1", null, !everyoneChecked ? "Checking your apps…" : text === "All normal" ? "All systems normal" : text),
+      h("h1", null, !everyoneChecked ? "Checking your apps…" : text),
     );
     mount(
       sub,
@@ -127,7 +130,7 @@ export function fleetView(root: Element, user: User): () => void {
       (a, b) => STATE_RANK[stateOf(a)] - STATE_RANK[stateOf(b)] || a.name.localeCompare(b.name),
     );
     if (layout === "cards") {
-      return mount(board, h("ul", { class: "app-cards", "aria-label": "Your apps, problems first" }, sorted.map((app) => card(app, statuses.get(app.slug)))));
+      return mount(board, h("ul", { class: "app-cards", "aria-label": "Your apps, problems first" }, sorted.map((app) => card(app, statuses.get(app.slug), days[app.slug]))));
     }
     // A column no app has anything for (no host connected anywhere, no app
     // reporting numbers) isn't drawn: the board stays a glance.
@@ -152,14 +155,14 @@ export function fleetView(root: Element, user: User): () => void {
               null,
               h("th", { scope: "col" }, "App"),
               h("th", { scope: "col", class: "col-state" }, "State"),
-              h("th", { scope: "col", class: "col-response num-col" }, "Response"),
-              h("th", { scope: "col", class: "col-uptime num-col" }, "Uptime 30 days"),
+              h("th", { scope: "col", class: "col-response" }, "Response"),
+              h("th", { scope: "col", class: "col-uptime" }, "Uptime 30 days"),
               columns.push && h("th", { scope: "col", class: "col-push" }, "Last push"),
               columns.numbers && h("th", { scope: "col", class: "col-numbers" }, "Numbers"),
-              h("th", { scope: "col", class: "col-checked num-col" }, "Checked"),
+              h("th", { scope: "col", class: "col-checked" }, "Checked"),
             ),
           ),
-          h("tbody", null, sorted.map((app) => row(app, statuses.get(app.slug), columns))),
+          h("tbody", null, sorted.map((app) => row(app, statuses.get(app.slug), columns, days[app.slug]))),
         ),
       ),
     );
@@ -173,6 +176,9 @@ export function fleetView(root: Element, user: User): () => void {
       const { statuses: list } = await api<{ statuses: AppStatus[] }>("GET", `/status${refresh ? "?refresh=1" : ""}`);
       statuses = new Map(list.map((s) => [s.slug, s]));
       lastLoaded = new Date().toISOString();
+      // The strips. Failing to read them keeps what was there.
+      const strips = await api<{ days: Record<string, UptimeDay[]> }>("GET", "/status/days").catch(() => undefined);
+      if (strips) days = strips.days;
       // The checks just recorded: the bell follows at once.
       void refreshNotifications(true);
       const read = await api<{ providers: ProviderStatus[] }>("GET", "/providers").then(
@@ -209,7 +215,7 @@ const numbers = (metrics: AppMetric[], n: number) =>
     .join(" · ");
 
 // What a row and a card both show about one app.
-function factsOf(app: App, s: AppStatus | undefined) {
+export function factsOf(app: App, s: AppStatus | undefined) {
   const state: ShownState = s?.state ?? "checking";
   const site = mainSite(app);
   const check = site && s?.checks[site.id];
@@ -247,9 +253,20 @@ function factsOf(app: App, s: AppStatus | undefined) {
 
 const none = () => h("span", { class: "meta" }, "—");
 
+// The last 30 days at a glance, one bar a day; hover for that day, click for
+// the app's history. It's one link, not 30 stops for the keyboard.
+const dayStrip = (app: App, list: UptimeDay[] | undefined) =>
+  list?.length
+    ? h(
+        "a",
+        { class: "bars bars--mini", href: `#/apps/${encodeURIComponent(app.slug)}/history`, "aria-label": daysSummary(list) },
+        list.map((d) => h("span", { class: `bar ${barClass(d)}`, "data-tip": dayTip(d) })),
+      )
+    : null;
+
 // One card: the app and its state on top, what's wrong (or where it lives),
 // then its figures. The name's link covers the whole card.
-function card(app: App, s: AppStatus | undefined) {
+function card(app: App, s: AppStatus | undefined, list: UptimeDay[] | undefined) {
   const f = factsOf(app, s);
   const figure = (label: string, value: Node | string | undefined) =>
     h("div", { class: "card-figure" }, h("dt", { class: "label" }, label), h("dd", { class: "mono" }, value ?? none()));
@@ -265,6 +282,7 @@ function card(app: App, s: AppStatus | undefined) {
       h("span", { class: "app-card-state" }, status(f.state)),
     ),
     h("div", { class: "truncate" }, f.reason),
+    dayStrip(app, list),
     h(
       "dl",
       { class: "card-figures" },
@@ -280,7 +298,7 @@ function card(app: App, s: AppStatus | undefined) {
 // Which optional columns the board draws: every row draws the same ones.
 type Columns = { push: boolean; numbers: boolean };
 
-function row(app: App, s: AppStatus | undefined, columns: Columns) {
+function row(app: App, s: AppStatus | undefined, columns: Columns, list: UptimeDay[] | undefined) {
   const { state, check, latest, reason, pushed, response, uptime } = factsOf(app, s);
 
   return h(
@@ -309,8 +327,8 @@ function row(app: App, s: AppStatus | undefined, columns: Columns) {
       ),
     ),
     h("td", { class: "col-state" }, status(state)),
-    h("td", { class: "col-response num-col mono" }, response ?? none()),
-    h("td", { class: "col-uptime num-col mono" }, uptime ?? none()),
+    h("td", { class: "col-response mono" }, response ?? none()),
+    h("td", { class: "col-uptime mono" }, h("div", { class: "uptime-cell" }, uptime ? h("span", { class: "uptime-text", title: uptime }, uptime) : none(), dayStrip(app, list))),
     columns.push && h("td", { class: pushed ? "col-push" : "col-push is-empty" }, pushed ?? none()),
     // What the app reports about itself (the first three numbers).
     columns.numbers &&
@@ -319,6 +337,6 @@ function row(app: App, s: AppStatus | undefined, columns: Columns) {
         { class: s?.metrics?.length ? "col-numbers" : "col-numbers is-empty" },
         s?.metrics?.length ? h("span", { class: "truncate numbers", title: numbers(s.metrics, 3) }, numbers(s.metrics, 3)) : none(),
       ),
-    h("td", { class: "col-checked num-col meta" }, latest ? timeAgo(latest.at) : "—"),
+    h("td", { class: "col-checked meta" }, latest ? timeAgo(latest.at) : "—"),
   );
 }

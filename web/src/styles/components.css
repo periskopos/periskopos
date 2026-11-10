@@ -452,6 +452,85 @@ select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* The open list drawn by the page, in the app's colors, instead of the system's.
+   It's still a real select: keyboard, typing to jump and forms work as ever. A
+   browser without this keeps its own list. */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+  /* The chevron is the control's background and the words stop at its content box, so a
+     long name can't push it out or run under it. The list shows that name whole. */
+  select {
+    --chevron-left: 45deg;
+    --chevron-right: -45deg;
+    display: block;
+    padding-right: calc(var(--space-3) + 1rem);
+    overflow: clip;
+    overflow-clip-margin: content-box;
+    text-align: left;
+    white-space: nowrap;
+    background-image:
+      linear-gradient(var(--chevron-left), transparent 50%, var(--color-text-tertiary) 50%, var(--color-text-tertiary) calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+      linear-gradient(var(--chevron-right), transparent 50%, var(--color-text-tertiary) 50%, var(--color-text-tertiary) calc(50% + 1.5px), transparent calc(50% + 1.5px));
+    background-repeat: no-repeat;
+    background-size: 5px 5px;
+    background-position: right calc(var(--space-3) + 5px) center, right var(--space-3) center;
+  }
+  select::picker-icon {
+    display: none;
+  }
+  select:open {
+    --chevron-left: -45deg;
+    --chevron-right: 45deg;
+    border-color: var(--color-border-focus);
+  }
+  ::picker(select) {
+    /* Below the control whenever it fits, rather than wherever there's more room. */
+    position-try-order: normal;
+    margin-block: var(--space-1);
+    padding: var(--space-1);
+    max-width: min(28rem, calc(100vw - 2 * var(--space-3)));
+    max-height: min(20rem, 60vh);
+    border: var(--border-width) solid var(--color-border-default);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-bg-raised);
+    box-shadow: var(--shadow-md);
+  }
+  option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: 2rem;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--border-radius-sm);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-md);
+    white-space: normal;
+    cursor: pointer;
+  }
+  option:hover,
+  option:focus-visible {
+    background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+    color: var(--color-text-primary);
+  }
+  option:checked {
+    background: transparent;
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-medium);
+  }
+  option:checked:hover,
+  option:checked:focus-visible {
+    background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+  }
+  /* The tick goes after the words, so every option's words start in line. */
+  option::checkmark {
+    order: 1;
+    margin-left: auto;
+    color: var(--color-accent-primary);
+  }
+}
 textarea {
   resize: vertical;
 }
@@ -462,6 +541,44 @@ textarea {
   gap: var(--space-3);
   cursor: pointer;
 }
+.pause-control {
+  position: relative;
+}
+.pause-control .pause-panel {
+  right: 0;
+}
+/* The button can be anywhere along the row here, so neither of its edges is safe to hang
+   from: the panel takes the window's width, at the height it would have been anyway. */
+@media (max-width: 800px) {
+  .pause-control .pause-panel {
+    position: fixed;
+    top: auto;
+    margin-top: var(--space-1);
+    right: var(--space-3);
+    left: var(--space-3);
+    width: auto;
+  }
+}
+.pause-slot {
+  display: contents;
+}
+.import-list {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+.pause-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.check:has(input:disabled) .field-label,
+.check:has(input:disabled) input {
+  opacity: 0.5;
+}
+
 .check input {
   width: 1rem;
   min-height: 0;
@@ -474,6 +591,155 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* One setting on one line: what it is, then its control. A control too wide to
+   fit beside the words drops under them, by itself, in a narrow window. */
+.section-body > div:empty {
+  display: none;
+}
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-5);
+}
+.setting-row + .setting-row {
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border-default);
+}
+.setting-row--sub {
+  margin-left: var(--space-5);
+}
+.setting-row-label {
+  display: flex;
+  flex: 1 1 16rem;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.setting-row-label .field-hint {
+  max-width: 68ch;
+}
+/* Several lines of a hint, each its own. */
+.setting-row-label .field-hint > span {
+  display: block;
+}
+.setting-row-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+.setting-row-control select {
+  min-width: 12rem;
+}
+.setting-row-control input {
+  width: 16rem;
+  max-width: 100%;
+}
+
+.setting-row--toggle {
+  flex-wrap: nowrap;
+  cursor: pointer;
+}
+.setting-row--toggle:has(input:disabled) {
+  cursor: not-allowed;
+}
+.setting-row--toggle:has(input:disabled) .field-label {
+  opacity: 0.5;
+}
+.toggle {
+  position: relative;
+  flex: none;
+  width: 2.25rem;
+  height: 1.25rem;
+}
+.toggle input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  transition: background var(--duration-fast) var(--easing-default);
+}
+.toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--color-on-solid);
+  transition: transform var(--duration-fast) var(--easing-default);
+}
+.toggle input:checked + .toggle-track {
+  background: var(--color-accent-primary);
+}
+.toggle input:checked + .toggle-track::after {
+  background: var(--color-bg-canvas);
+  transform: translateX(1rem);
+}
+.toggle input:disabled + .toggle-track {
+  opacity: 0.5;
+}
+.toggle input:focus-visible + .toggle-track,
+.segmented-option input:focus-visible + span {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.segmented {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 2px;
+  gap: 2px;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-sunken);
+}
+.segmented-option {
+  position: relative;
+  cursor: pointer;
+}
+.segmented-option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.segmented-option span {
+  display: block;
+  padding: var(--space-1) var(--space-3);
+  border-radius: calc(var(--border-radius-md) - 2px);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  white-space: nowrap;
+  transition: background var(--duration-fast) var(--easing-default), color var(--duration-fast) var(--easing-default);
+}
+.segmented-option:hover span {
+  color: var(--color-text-primary);
+}
+.segmented-option input:checked + span {
+  background: var(--color-bg-inverse);
+  color: var(--color-text-inverse);
+  font-weight: var(--font-weight-medium);
 }
 
 .notice {

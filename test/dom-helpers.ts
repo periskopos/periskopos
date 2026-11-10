@@ -61,7 +61,7 @@ export function unnamed(root: Element): string[] {
   const nameOf = (el: Element): string => {
     const labelledBy = el.getAttribute("aria-labelledby");
     const byLabel = labelledBy ? spoken(root.ownerDocument.getElementById(labelledBy) ?? root.querySelector(`#${labelledBy}`)) : "";
-    return (el.getAttribute("aria-label") ?? "").trim() || byLabel || (el.closest("label") ? spoken(el.closest("label")) : "") || el.getAttribute("title") || spoken(el);
+    return (el.getAttribute("aria-label") ?? "").trim() || byLabel || (el.closest("label") ? spoken(el.closest("label")) : "") || (el.id ? spoken(root.querySelector(`label[for="${el.id}"]`)) : "") || el.getAttribute("title") || spoken(el);
   };
   const missing: string[] = [];
   for (const el of root.querySelectorAll("a[href], button, input, select, textarea, [tabindex], [role=img]")) {

@@ -1,7 +1,24 @@
-import type { AppStatus, ProviderStatus } from "./types.ts";
+import type { AppStatus, ProviderStatus, UptimeDay } from "./types.ts";
 
 // Pure wording and counting for the Fleet, kept apart from the DOM so Node
 // can test it.
+
+// How a day went, for its bar. A day nobody watched has no band: it's a gap,
+// not a good day.
+export function uptimeBand(pct: number | undefined): "up" | "warn" | "down" | undefined {
+  if (pct === undefined) return undefined;
+  return pct >= 99.9 ? "up" : pct >= 99 ? "warn" : "down";
+}
+
+// A strip of days, in words: what a screen reader gets instead of 30 bars.
+export function daysSummary(days: UptimeDay[]): string {
+  const watched = days.filter((d) => d.uptimePct !== undefined);
+  if (watched.length === 0) return `Not watched in the last ${days.length} days. Open its history.`;
+  const short = watched.filter((d) => uptimeBand(d.uptimePct) !== "up").length;
+  const unwatched = days.length - watched.length;
+  const shown = short === 0 ? "every day watched at 99.9% or better" : `${short} day${short === 1 ? "" : "s"} below 99.9%`;
+  return `Uptime, last ${days.length} days: ${shown}${unwatched ? `, ${unwatched} not watched` : ""}. Open its history.`;
+}
 
 export type FleetLamp = "down" | "attention" | "unknown" | "stale" | "up" | "none";
 

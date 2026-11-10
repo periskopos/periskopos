@@ -11,6 +11,7 @@
 
 .board {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--font-size-md);
 }
@@ -37,8 +38,32 @@
 .board tbody tr:first-child td {
   border-top: 0;
 }
-.board .num-col {
-  text-align: right;
+/* Every column starts under its header. The App column takes the spare width,
+   and the rest keep their places whatever they hold, so a value changing
+   doesn't move its neighbours; what doesn't fit is cut short, not pushed out. */
+.board th.col-numbers {
+  width: 14rem;
+}
+.board th.col-state {
+  width: 10rem;
+}
+.board th.col-response {
+  width: 6.5rem;
+}
+.board th.col-uptime {
+  width: 9.5rem;
+}
+.board th.col-push {
+  width: 12rem;
+}
+.board th.col-checked {
+  width: 7rem;
+}
+/* The State column says it, with the same dot. Phones have no State column. */
+@media (min-width: 600px) {
+  .board .app-cell > .lamp {
+    display: none;
+  }
 }
 .board tbody tr {
   position: relative;
@@ -88,6 +113,11 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  max-width: 100%;
+}
+.app-name .row-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* The name's link covers the whole row. */
 .row-link {
@@ -194,6 +224,70 @@
 .app-card-state {
   flex: none;
   font-size: var(--font-size-sm);
+}
+/* The last 30 days, small: the History tab's bars, above the link that covers
+   the card or row, so each day can be hovered. */
+.bars.bars--mini {
+  position: relative;
+  z-index: 1;
+  gap: 1px;
+  height: 1.25rem;
+  border-radius: var(--border-radius-sm);
+}
+.bars--mini:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.bars--mini .bar {
+  border-radius: 1px;
+  cursor: pointer;
+}
+/* An outline doesn't fit on a bar this thin. */
+.bars--mini .bar:not(.bar--up, .bar--warn, .bar--down) {
+  box-shadow: none;
+  background: var(--color-border-default);
+}
+.bars--mini .bar:hover {
+  transform: none;
+}
+.bars--mini .bar::after {
+  font-family: var(--font-family-body);
+  font-weight: normal;
+  text-align: left;
+}
+.uptime-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+/* "100% of 2 h 15 min" is wider than the column. The whole of it is in the title. */
+.uptime-text {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The row is nowrap; a day's tooltip has to wrap inside its box. */
+.bars--mini .bar::after {
+  white-space: normal;
+}
+.uptime-cell .bars.bars--mini {
+  width: 7.5rem;
+  height: 0.75rem;
+}
+/* A wide window: the spare room goes to the strip, not to a gap between an app's
+   name and its state. */
+@container page (min-width: 88rem) {
+  .board th.col-uptime {
+    width: 24rem;
+  }
+  .uptime-cell .bars.bars--mini {
+    width: 100%;
+  }
+  .uptime-cell {
+    align-items: stretch;
+  }
 }
 .card-figures {
   display: grid;

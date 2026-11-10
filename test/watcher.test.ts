@@ -8,7 +8,7 @@ import { openDb } from "../server/db.ts";
 import * as history from "../server/history.ts";
 import { complement, intersect, merge, total } from "../server/intervals.ts";
 import type { Notice } from "../server/alerts/notify.ts";
-import { updateSettings } from "../server/settings.ts";
+import { getSettings, heldAlerts, updateSettings } from "../server/settings.ts";
 import { StatusService } from "../server/status.ts";
 import * as store from "../server/store.ts";
 import { duration } from "../shared/format.ts";
@@ -105,6 +105,86 @@ describe("incidents and notifications (FR-W3, FR-W4)", () => {
     await check();
     assert.ok(history.openIncidentFor(db, site_().id));
     assert.equal(notices.length, 0);
+  });
+});
+
+describe("choosing and pausing alerts", () => {
+  const down = async () => {
+    healthy = false;
+    await check();
+    await check();
+  };
+  const soon = () => new Date(Date.now() + 60 * 60_000).toISOString();
+
+  test("a kind switched off says nothing, and is still recorded", async () => {
+    updateSettings(db, userId, { alertOutages: false });
+    await down();
+    assert.ok(history.openIncidentFor(db, site_().id));
+    assert.equal(notices.length, 0);
+    assert.deepEqual(heldAlerts(db, userId), [], "and nothing's kept for later");
+  });
+
+  test("another kind switched off changes nothing", async () => {
+    updateSettings(db, userId, { alertDeploys: false });
+    await down();
+    assert.equal(notices.length, 1);
+  });
+
+  test("a pause holds an alert, still records it, and one message comes when it ends", async () => {
+    updateSettings(db, userId, { alertsPausedUntil: soon() });
+    await down();
+    assert.ok(history.openIncidentFor(db, site_().id));
+    assert.equal(notices.length, 0);
+    healthy = true;
+    await check();
+    assert.equal(notices.length, 0);
+    assert.equal(heldAlerts(db, userId).length, 2, "down and back");
+    await watcher.tick(Date.now());
+    assert.equal(notices.length, 0, "still paused: still held");
+    updateSettings(db, userId, { alertsPausedUntil: "" });
+    await watcher.tick(Date.now());
+    const summary = notices.filter((n) => /while paused/.test(n.title));
+    assert.equal(summary.length, 1);
+    assert.equal(summary[0]!.title, "2 alerts while paused");
+    assert.deepEqual(heldAlerts(db, userId), []);
+    const before = notices.length;
+    await watcher.tick(Date.now());
+    assert.equal(notices.filter((n) => /while paused/.test(n.title)).length, 1, "only once");
+    assert.ok(notices.length >= before);
+  });
+
+  test("pausing one app holds only that app's, and it comes out when that pause ends", async () => {
+    updateSettings(db, userId, { appPauses: { other: soon() } });
+    await down();
+    assert.equal(notices.length, 1, "another app's pause doesn't cover this one");
+    healthy = true;
+    await check();
+    notices.length = 0;
+    updateSettings(db, userId, { appPauses: { [app.id]: soon() } });
+    await down();
+    assert.equal(notices.length, 0);
+    assert.equal(heldAlerts(db, userId).length, 1);
+    updateSettings(db, userId, { appPauses: {} });
+    await watcher.tick(Date.now());
+    assert.ok(notices.some((n) => /This happened while alerts were paused/.test(n.body)));
+    assert.deepEqual(heldAlerts(db, userId), []);
+  });
+
+  test("with Notify me off when a pause ends, what it held is dropped, not saved for later", async () => {
+    updateSettings(db, userId, { alertsPausedUntil: soon() });
+    await down();
+    updateSettings(db, userId, { alertsPausedUntil: "", notificationsEnabled: false });
+    await watcher.tick(Date.now());
+    assert.equal(notices.length, 0);
+    assert.deepEqual(heldAlerts(db, userId), []);
+  });
+
+  test("a pause ending is noticed even with the checks switched off", async () => {
+    updateSettings(db, userId, { alertsPausedUntil: soon() });
+    await down();
+    updateSettings(db, userId, { alertsPausedUntil: "", watcherEnabled: false });
+    await watcher.tick(Date.now());
+    assert.equal(notices.length, 1);
   });
 });
 
@@ -293,6 +373,44 @@ describe("when the checks themselves stop", () => {
     await settle();
     assert.equal(stuck.stoppedSince, undefined);
     assert.equal(notices.at(-1)?.title, "Periskopos is checking your apps again");
+  });
+
+  test("during a pause, 'checks stopped' is dropped, not held to be said days late", async () => {
+    let hold: Promise<void> | undefined;
+    class Stuck extends StatusService {
+      override async check(...args: Parameters<StatusService["check"]>) {
+        await hold;
+        return super.check(...args);
+      }
+    }
+    const stuck = new Watcher({
+      db,
+      notifier: { notify: async (n) => void notices.push(n) },
+      baseUrl: "http://localhost:4100",
+      status: new Stuck(0),
+      isOnline: async () => true,
+    });
+    updateSettings(db, userId, { alertsPausedUntil: new Date(Date.now() + 48 * 3_600_000).toISOString() });
+    const T0 = Date.now();
+    await stuck.tick(T0);
+    let release = () => {};
+    hold = new Promise((resolve) => (release = resolve));
+    const later = T0 + 60 * 60_000;
+    const hung = stuck.tick(later);
+    for (let i = 1; i <= STOPPED_AFTER_TICKS; i++) await stuck.tick(later + i * TICK_MS);
+    await settle();
+    assert.ok(stuck.stoppedSince, "it still knows the checks stopped");
+    assert.deepEqual(notices, [], "but says nothing");
+    assert.deepEqual(heldAlerts(db, userId), [], "and keeps nothing for later");
+    release();
+    await hung;
+  });
+
+  test("a damaged held-alerts row doesn't stop a tick", async () => {
+    db.prepare("INSERT INTO settings (user_id, key, value) VALUES (?, 'heldAlerts', '{not json') ON CONFLICT (user_id, key) DO UPDATE SET value = excluded.value").run(userId);
+    assert.deepEqual(heldAlerts(db, userId), []);
+    assert.equal(getSettings(db, userId).notificationsEnabled, true, "nor the settings read beside it");
+    await assert.doesNotReject(watcher.tick(Date.now()));
   });
 
   test("a PC that slept missed no ticks: nothing to say", async () => {

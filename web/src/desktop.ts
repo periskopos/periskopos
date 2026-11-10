@@ -6,7 +6,7 @@
 // painted in, "go to this route"); anything product-shaped goes over HTTP like
 // it does in a browser. See desktop/ipc-channels.ts.
 
-import type { UpdateAction } from "../../shared/desktop.ts";
+import type { ShellPrefs, UpdateAction } from "../../shared/desktop.ts";
 
 export type ShellColors = { background: string; foreground: string; accent: string };
 
@@ -16,6 +16,7 @@ export type DesktopBridge = {
   setChromeColors?: (colors: ShellColors) => void;
   openLogs?: () => void;
   openBackups?: () => void;
+  openData?: () => void;
   hardReloadWindow?: () => void;
   minimizeWindow?: () => void;
   toggleMaximizeWindow?: () => void;
@@ -27,6 +28,8 @@ export type DesktopBridge = {
   updateAction?: (action: UpdateAction) => void;
   getStartAtLogin?: (handler: (state: unknown) => void) => void;
   setStartAtLogin?: (on: boolean, handler: (state: unknown) => void) => void;
+  getShellPrefs?: (handler: (prefs: unknown) => void) => void;
+  setShellPrefs?: (prefs: ShellPrefs, handler: (prefs: unknown) => void) => void;
 };
 
 // Start at login as the shell tells it: whether it can be changed from the
@@ -37,6 +40,14 @@ export function asLoginItemState(value: unknown): LoginItemState | null {
   if (typeof value !== "object" || value === null) return null;
   const { available, enabled } = value as Record<string, unknown>;
   return typeof available === "boolean" && typeof enabled === "boolean" ? { available, enabled } : null;
+}
+
+// The app's preferences as the shell tells them.
+export function asShellPrefs(value: unknown): ShellPrefs | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { theme, onClose } = value as Record<string, unknown>;
+  if (theme !== "system" && theme !== "light" && theme !== "dark") return null;
+  return onClose === "tray" || onClose === "quit" ? { theme, onClose } : null;
 }
 
 // The bridge, or null in a browser tab.

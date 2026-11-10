@@ -88,6 +88,11 @@ export function parseLoginItem(text: string): boolean {
   }
 }
 
+// ── The app's own preferences ──
+
+// The theme it opens in, and what closing its window does.
+export type ShellPrefs = { theme: "system" | "light" | "dark"; onClose: "tray" | "quit" };
+
 // ── Updates, as the app's window shows them ─────────────────────────────
 
 // Where the updater stands (desktop/updater.ts). The tray and the window's

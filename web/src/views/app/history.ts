@@ -1,5 +1,6 @@
 import { duration } from "../../../../shared/format.ts";
-import type { DayStat } from "../../../../shared/types.ts";
+import { uptimeBand } from "../../../../shared/fleet.ts";
+import type { UptimeDay } from "../../../../shared/types.ts";
 import { api } from "../../api.ts";
 import { h } from "../../dom.ts";
 import { formatPct, range } from "../../format.ts";
@@ -90,14 +91,12 @@ export function history(page: AppPage) {
   ];
 }
 
-function barClass(d: DayStat): string {
-  if (d.uptimePct === undefined) return "";
-  if (d.uptimePct >= 99.9) return "bar--up";
-  if (d.uptimePct >= 99) return "bar--warn";
-  return "bar--down";
+export function barClass(d: UptimeDay): string {
+  const band = uptimeBand(d.uptimePct);
+  return band ? `bar--${band}` : "";
 }
 
-function dayTip(d: DayStat): string {
+export function dayTip(d: UptimeDay): string {
   const date = new Date(`${d.day}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
   if (d.uptimePct === undefined) return `${date} · not watched`;
   return `${date} · ${formatPct(d.uptimePct)} · watched ${duration(d.watchedMin * 60_000)}${d.incidents ? ` · ${d.incidents} incident${d.incidents === 1 ? "" : "s"}` : ""}`;
