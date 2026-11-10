@@ -226,7 +226,8 @@ const SHOTS: [string, string, string?][] = [
   ["world", "#/world"],
   ["world-campus", "#/world", label("Comet-Mail")],
   ["world-key", "#/world", `[...document.querySelectorAll("summary")].find((s) => s.textContent.startsWith("What am I looking at"))?.click()`],
-  ["world-watcher", "#/world", label("The watcher")],
+  // Zoomed in a little more once it has turned to the dish, so no campus's label is left half hidden by the key at the edge.
+  ["world-watcher", "#/world", `(async () => { ${label("The watcher")}; await new Promise((r) => setTimeout(r, 1500)); for (let i = 0; i < 2; i++) { [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "+")?.click(); await new Promise((r) => setTimeout(r, 400)); } })()`],
 ];
 
 async function shots(theme: Theme) {
