@@ -4,6 +4,10 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
+## Next release
+
+- The README shows the M8ven trust badge for the MCP server.
+
 ## 0.5.0 (2026-11-10)
 
 - **The World:** a second way to see the Apps page, as your own Silicon Valley, drawn from

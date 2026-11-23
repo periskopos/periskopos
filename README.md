@@ -14,6 +14,7 @@
   <a href="https://github.com/periskopos/periskopos/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/periskopos/periskopos?label=release"></a>
   <a href="LICENSE"><img alt="Licence: Apache 2.0" src="https://img.shields.io/badge/licence-Apache%202.0-blue.svg"></a>
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey">
+  <a href="https://m8ven.ai/mcp/periskopos-periskopos-16o2i0?s=readme"><img alt="M8ven Score" src="https://m8ven.ai/badge/mcp/periskopos-periskopos-16o2i0?v=9621df61b8daec6a5e573d369c402310"></a>
 </p>
 
 <p align="center">
