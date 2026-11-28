@@ -40,10 +40,10 @@
     "build-preload": "node desktop/build/build-preload.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.5",
+    "@hono/node-server": "^2.1.11",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "electron-updater": "^6.8.11",
-    "hono": "^4.13.14",
+    "hono": "^4.13.23",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -52,7 +52,7 @@
     "@types/node": "^24.19.2",
     "@types/three": "^0.187.0",
     "deno": "^2.9.6",
-    "electron": "^45.1.0",
+    "electron": "^45.5.0",
     "electron-builder": "^26.18.0",
     "happy-dom": "^21.0.4",
     "three": "^0.187.0",
