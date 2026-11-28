@@ -4,7 +4,7 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
-## Next release
+## 0.5.3 (2026-11-28)
 
 - When GitHub didn't start CI's jobs and Periskopos can't read GitHub's reason, the alert
   still offers **Check GitHub billing**. The GitHub setup guide now asks for Checks:
