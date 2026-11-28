@@ -126,7 +126,7 @@ describe("slow answers (an attention incident, not an outage)", () => {
     db = openDb(":memory:");
     const userId = store.createUser(db, "Me").id;
     app = store.createApp(db, userId, { name: "Test App", url: `${base}/` });
-    store.updateConnectionSettings(db, app, app.connections[0].id, { slowMs: 100, slowChecks: 3 });
+    store.updateConnectionSettings(db, app, app.connections[0].id, { slowMs: 400, slowChecks: 3 });
     app = store.getApp(db, userId, app.slug)!;
     watcher = new Watcher({ db, notifier: { notify: async (n) => void notices.push(n) }, baseUrl: "http://localhost:4100", status: new StatusService(0), isOnline: async () => true });
   });
@@ -134,22 +134,22 @@ describe("slow answers (an attention incident, not an outage)", () => {
   const check = () => watcher.checkConnection(app, app.connections[0]);
 
   test("slow for the checks in a row it takes opens one, and notifies once", async () => {
-    delayMs = 150;
+    delayMs = 600;
     const first = await check();
     assert.equal(first?.state, "up", "slow is still up");
-    assert.match(first?.summary ?? "", /^Slow: \d+ ms, over 100 ms$/);
+    assert.match(first?.summary ?? "", /^Slow: \d+ ms, over 400 ms$/);
     await check();
     assert.equal(history.openIncidentFor(db, app.connections[0].id), undefined, "two aren't three");
     await check();
     const incident = history.openIncidentFor(db, app.connections[0].id);
     assert.equal(incident?.kind, "slow");
-    assert.match(incident?.reason ?? "", /over 100 ms for 3 checks in a row/);
+    assert.match(incident?.reason ?? "", /over 400 ms for 3 checks in a row/);
     await check();
     assert.deepEqual(notices.map((n) => n.title), ["Test App is slow"]);
   });
 
   test("the first fast answer closes it", async () => {
-    delayMs = 150;
+    delayMs = 600;
     for (let i = 0; i < 3; i++) await check();
     delayMs = 0;
     await check();
@@ -158,12 +158,12 @@ describe("slow answers (an attention incident, not an outage)", () => {
   });
 
   test("a fast one in between starts the count again", async () => {
-    delayMs = 150;
+    delayMs = 600;
     await check();
     await check();
     delayMs = 0;
     await check();
-    delayMs = 150;
+    delayMs = 600;
     await check();
     await check();
     assert.equal(history.openIncidentFor(db, app.connections[0].id), undefined);
@@ -171,10 +171,10 @@ describe("slow answers (an attention incident, not an outage)", () => {
   });
 
   test("an outage replaces it: one is open at a time, and the outage is the news", async () => {
-    delayMs = 150;
+    delayMs = 600;
     for (let i = 0; i < 3; i++) await check();
     page = "Oops";
-    store.updateConnectionSettings(db, app, app.connections[0].id, { slowMs: 100, slowChecks: 3, expectText: "Welcome" });
+    store.updateConnectionSettings(db, app, app.connections[0].id, { slowMs: 400, slowChecks: 3, expectText: "Welcome" });
     app = store.getApp(db, app.ownerId, app.slug)!;
     await check();
     assert.equal(history.openIncidentFor(db, app.connections[0].id)?.kind, "slow", "one failure is only a failure");
@@ -188,7 +188,7 @@ describe("slow answers (an attention incident, not an outage)", () => {
   });
 
   test("switched off while slow: it ends without a notification", async () => {
-    delayMs = 150;
+    delayMs = 600;
     for (let i = 0; i < 3; i++) await check();
     store.updateConnectionSettings(db, app, app.connections[0].id, {});
     app = store.getApp(db, app.ownerId, app.slug)!;

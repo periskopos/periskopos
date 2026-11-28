@@ -4,6 +4,14 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
+## Next release
+
+- When GitHub didn't start CI's jobs and Periskopos can't read GitHub's reason, the alert
+  still offers **Check GitHub billing**. The GitHub setup guide now asks for Checks:
+  Read-only, so it can read the reason and say for sure.
+- Security updates: hono 4.13.23 and @hono/node-server 2.1.11 (fixes for routes skipping
+  middleware and a crash on a dropped socket), and Electron 45.5.0.
+
 ## 0.5.2 (2026-11-28)
 
 - **Clearer "needs attention":** red CI now says why. When GitHub never started the jobs

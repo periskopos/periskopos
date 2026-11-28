@@ -376,7 +376,7 @@ export const ACCOUNTS: Record<ServiceType, AccountInfo> = {
       steps: [
         "Name the token Periskopos and pick an expiry date.",
         "Under Repository access, choose your apps' repositories (or All repositories).",
-        "Under Permissions → Repositories, set Actions and Contents to Read-only (Metadata is added by itself). For security alerts, also set Dependabot alerts and Secret scanning alerts to Read-only. For configuration checks (branch protection, Dependabot, workflow permissions), also set Administration to Read-only.",
+        "Under Permissions → Repositories, set Actions, Checks and Contents to Read-only (Metadata is added by itself). Checks lets Periskopos say why CI didn't run, such as GitHub billing. For security alerts, also set Dependabot alerts and Secret scanning alerts to Read-only. For configuration checks (branch protection, Dependabot, workflow permissions), also set Administration to Read-only.",
         "Click Generate token, copy it, and paste it below.",
       ],
       looksLike: "github_pat_",

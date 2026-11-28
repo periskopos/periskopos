@@ -663,13 +663,15 @@ describe("check_app", () => {
     assert.equal(recorded.link?.label, "Open GitHub billing");
   });
 
-  test("unstarted jobs without GitHub's words (no Checks permission) still say no step ran", async () => {
+  test("unstarted jobs without GitHub's words (no Checks permission) still say no step ran, and where to check", async () => {
     ghRuns = [failingRun];
     ghJobs = [unstarted(1)];
     ghAnnotations = 403;
     const r = await call(await connect(), "check_app", { slug: "star-map" });
     assert.match(github(r).problem!, /^GitHub didn't start CI's jobs \(no step ran/);
-    assert.equal(github(r).seeWhy, failingRun.html_url, "no billing page claimed without GitHub saying so");
+    assert.equal(github(r).seeWhy, "https://github.com/organizations/o/settings/billing", "billing is the likely place to look");
+    const recorded = history.latestCheck(db, app.connections.find((c) => c.type === "github")!.id)!;
+    assert.equal(recorded.link?.label, "Check GitHub billing", "a place to check, not a claim");
   });
 
   test("red CI's incident starts at the failed run, and its words follow the better reason", async () => {

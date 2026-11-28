@@ -276,7 +276,9 @@ export function causeOf(jobs: GhJob[], annotations: string[] | undefined, billin
     const said = annotations?.find((m) => m.trim());
     if (said && isBilling(said)) return { kind: "billing", text: BILLING_TEXT, link: { url: billing, label: "Open GitHub billing" } };
     const why = said ? `: ${said.trim().replace(/\s+/g, " ").slice(0, 200)}` : " (no step ran, often billing or a spending limit)";
-    return { kind: "not-started", text: `GitHub didn't start CI's jobs${why}` };
+    // Without GitHub's words, billing is only the likely place to look: the
+    // button says "check", and the text says it's a guess.
+    return { kind: "not-started", text: `GitHub didn't start CI's jobs${why}`, ...(said ? {} : { link: { url: billing, label: "Check GitHub billing" } }) };
   }
   const job = jobs.find((j) => j.steps?.some(buildFailed)) ?? jobs[0]!;
   const step = job.steps?.find(buildFailed);
