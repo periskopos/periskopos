@@ -78,7 +78,8 @@ export const CONNECTIONS: Record<string, ConnectionInfo> = {
     label: "Supabase",
     account: "supabase",
     incidentKind: "dependency",
-    offer: { gives: "Project health: a warning when it's paused or unhealthy", noun: "project", connectAs: "Project · health" },
+    shows: "database",
+    offer: { gives: "Project health: a warning when it's paused, unhealthy or about to be paused for being idle; its plan, requests, Edge Functions and backups on the app's page", noun: "project", connectAs: "Project · health" },
   },
   "search-console": {
     label: "Search Console",
@@ -427,7 +428,7 @@ export const ACCOUNTS: Record<ServiceType, AccountInfo> = {
     offers: ["supabase", "supabase-logs"],
     status: statusPage("https://status.supabase.com"),
     guide: {
-      gives: "Whether your Supabase projects are healthy, and a warning when one is paused.",
+      gives: "Whether your Supabase projects are healthy, a warning when one is paused or a free one is about to be, and each project's plan, requests, Edge Functions and backups.",
       link: { href: "https://supabase.com/dashboard/account/tokens", text: "Open Supabase: Account → Access Tokens" },
       steps: [
         "Click Generate new token and name it Periskopos.",

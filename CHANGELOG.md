@@ -4,6 +4,16 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
+## Next release
+
+- **Supabase on the app page:** a Database panel with the project's plan, region and
+  Postgres version, its API requests over the last 7 days (a chart by kind), its Edge
+  Functions and when each was deployed, and its backups. A part the token can't read is
+  said, never shown as zero. AI assistants get the same through `get_app`.
+- **Before a free Supabase project is paused:** Supabase pauses a free project after a week
+  without activity. When one has had no API requests for 5 days, it needs attention, with a
+  link to open it.
+
 ## 0.5.3 (2026-11-28)
 
 - When GitHub didn't start CI's jobs and Periskopos can't read GitHub's reason, the alert

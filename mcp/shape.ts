@@ -88,6 +88,7 @@ export function appDetail(input: {
   const errors = details.find((d) => d.shape === "errors");
   const payments = details.find((d) => d.shape === "payments");
   const logs = details.find((d) => d.shape === "logs");
+  const database = details.find((d) => d.shape === "database");
 
   return {
     ...appSummary(app, status),
@@ -153,6 +154,24 @@ export function appDetail(input: {
             ...(logs.partial ? { note: "More lines than were read: counts are a floor" } : {}),
             ...(logs.spike ? { problem: `Errors are spiking: ${logs.spike.recent} in the last ${logs.spike.windowMin} minutes against about ${logs.spike.usual} usually` } : {}),
             topErrors: logs.groups.slice(0, 8).map((g) => ({ message: g.message, count: g.count, level: g.level, lastAt: g.lastAt, ...(g.source ? { source: g.source } : {}) })),
+          },
+        }
+      : {}),
+    // The hosted database (Supabase): plan, use over the last 7 days, what runs beside it.
+    ...(database?.shape === "database"
+      ? {
+          database: {
+            provider: database.provider,
+            project: database.project,
+            status: database.status,
+            ...(database.plan ? { plan: database.plan } : {}),
+            ...(database.region ? { region: database.region } : {}),
+            ...(database.postgres ? { postgres: database.postgres } : {}),
+            ...(database.requests ? { apiRequests7d: database.requests.total, ...(database.requests.lastAt ? { lastApiRequestAt: database.requests.lastAt } : {}) } : {}),
+            ...(database.pausesWhenIdle ? { freePlanPause: `Paused after ${database.pausesWhenIdle.afterDays} days without activity; ${database.pausesWhenIdle.idleDays} days without API requests now` } : {}),
+            ...(database.functions ? { edgeFunctions: database.functions.map((f) => ({ name: f.name, status: f.status, version: f.version, ...(f.updatedAt ? { updatedAt: f.updatedAt } : {}) })) } : {}),
+            ...(database.backups ? { backups: database.backups } : {}),
+            ...(database.notes.length ? { notShown: database.notes } : {}),
           },
         }
       : {}),

@@ -364,7 +364,27 @@ export type CiRun = {
 // search results. The catalog
 // says which a connection shows (shared/catalog.ts); the integration fills
 // it in, down to the words of the link to the provider's own page.
-export type ConnectionDetails = DeploysDetails | CommitsDetails | TrafficDetails | SearchDetails | ErrorsDetails | PaymentsDetails | LogsDetails;
+export type ConnectionDetails = DeploysDetails | CommitsDetails | TrafficDetails | SearchDetails | ErrorsDetails | PaymentsDetails | LogsDetails | DatabaseDetails;
+
+// A hosted database's view of an app (Supabase): its plan and where it runs,
+// how much it's used, and what runs beside it. A part that couldn't be read
+// is left out and said in `notes`, never shown as zero.
+export type DatabaseRequestsDay = { day: string; rest: number; auth: number; storage: number; realtime: number }; // day: YYYY-MM-DD, UTC
+export type DatabaseDetails = {
+  shape: "database";
+  provider: string; // "Supabase"
+  project: string;
+  status: string; // "Running", "Project is paused"
+  plan?: string; // "free", "pro"…
+  region?: string;
+  postgres?: string; // "17.4.1.054"
+  requests?: { days: DatabaseRequestsDay[]; total: number; lastAt?: string }; // the last 7 days
+  pausesWhenIdle?: { afterDays: number; idleDays: number }; // a free project, paused after a week without activity
+  functions?: { name: string; slug: string; status: string; version: number; updatedAt?: string }[];
+  backups?: { pitr: boolean; count: number; latest?: string };
+  notes: string[];
+  link: DetailsLink;
+};
 
 // "All in Cloudflare", "All on GitHub": the provider's page for the rest.
 export type DetailsLink = { url: string; label: string };

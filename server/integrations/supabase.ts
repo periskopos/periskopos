@@ -1,4 +1,4 @@
-import type { AuditResult, CheckResult, FindingDraft, FindingSeverity } from "../../shared/types.ts";
+import type { AuditResult, CheckResult, DatabaseDetails, DatabaseRequestsDay, FindingDraft, FindingSeverity } from "../../shared/types.ts";
 import { badRequest } from "../errors.ts";
 import { ProviderError, getJson } from "../http.ts";
 import { requiredText } from "../validate.ts";
@@ -11,7 +11,7 @@ import type { Integration, ServiceAuth } from "./types.ts";
 
 const API = "https://api.supabase.com/v1";
 
-type Project = { id: string; ref?: string; name: string; region?: string; status: string };
+type Project = { id: string; ref?: string; name: string; region?: string; status: string; organization_id?: string; organization_slug?: string; database?: { version?: string } };
 type Health = { name: string; healthy: boolean; status?: string; error?: string };
 
 async function sb<T>(auth: ServiceAuth, path: string, ttlMs = 60_000): Promise<T> {
@@ -173,6 +173,97 @@ export function findingsFromLints(lints: Lint[], ref: string): { findings: Findi
   return { findings: [...findings.values()], notes };
 }
 
+// "2026-08-22T00:13:07.000000" (UTC, no offset), "2026-08-22 00:13:07", or
+// microseconds since 1970 as logs.all gave them.
+export function parseTime(t: unknown): string | undefined {
+  if (typeof t === "number" && Number.isFinite(t)) {
+    const ms = t > 1e14 ? t / 1000 : t > 1e11 ? t : t * 1000;
+    return new Date(ms).toISOString();
+  }
+  if (typeof t !== "string" || !t.trim()) return undefined;
+  let s = t.trim().replace(" ", "T").replace(/(\.\d{3})\d+/, "$1");
+  if (!/(Z|[+-]\d\d:?\d\d)$/i.test(s)) s += "Z";
+  const ms = Date.parse(s);
+  return Number.isNaN(ms) ? undefined : new Date(ms).toISOString();
+}
+
+
+// ── Use: requests, idleness, what runs beside the database ─────────────
+// A free project is paused after a week without activity (Supabase's
+// policy), and a paused one stops answering. Its API requests are what can be
+// read of that activity: a project used only through direct Postgres
+// connections shows none, which is why the warning says "API requests".
+
+export const PAUSE_AFTER_DAYS = 7;
+export const IDLE_WARN_DAYS = 5;
+const DAY_MS = 24 * 60 * 60_000;
+
+type Org = { plan?: string };
+type CountRow = { timestamp?: string | number; total_auth_requests?: number; total_rest_requests?: number; total_storage_requests?: number; total_realtime_requests?: number };
+type Counts = { result?: CountRow[] | null; error?: unknown };
+type Fn = { name: string; slug: string; status: string; version: number; updated_at?: number };
+type Backups = { pitr_enabled?: boolean; backups?: { status?: string; inserted_at?: string }[] };
+
+// The last 7 days' API requests, a day at a time (UTC), oldest first, with
+// the newest time any were made.
+export function requestsByDay(rows: CountRow[], now: number): NonNullable<DatabaseDetails["requests"]> {
+  const days = new Map<string, DatabaseRequestsDay>();
+  for (let i = PAUSE_AFTER_DAYS - 1; i >= 0; i--) {
+    const day = new Date(now - i * DAY_MS).toISOString().slice(0, 10);
+    days.set(day, { day, rest: 0, auth: 0, storage: 0, realtime: 0 });
+  }
+  let lastAt: string | undefined;
+  for (const r of rows) {
+    const at = parseTime(r.timestamp);
+    const d = at && days.get(at.slice(0, 10));
+    if (!at || !d) continue;
+    const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x > 0 ? x : 0);
+    const [rest, auth, storage, realtime] = [n(r.total_rest_requests), n(r.total_auth_requests), n(r.total_storage_requests), n(r.total_realtime_requests)];
+    d.rest += rest;
+    d.auth += auth;
+    d.storage += storage;
+    d.realtime += realtime;
+    if (rest + auth + storage + realtime > 0 && (!lastAt || at > lastAt)) lastAt = at;
+  }
+  const list = [...days.values()];
+  const total = list.reduce((t, d) => t + d.rest + d.auth + d.storage + d.realtime, 0);
+  return { days: list, total, ...(lastAt ? { lastAt } : {}) };
+}
+
+// Whole days since the last API request; a week or more when there was none in the window.
+export const idleDaysOf = (lastAt: string | undefined, now: number) => (lastAt ? Math.max(0, Math.floor((now - Date.parse(lastAt)) / DAY_MS)) : PAUSE_AFTER_DAYS);
+
+const isFree = (plan: string | undefined) => plan?.toLowerCase() === "free";
+
+// The idle warning, in words, when a free project is close to being paused.
+export function idleWarning(plan: string | undefined, lastAt: string | undefined, now: number): string | undefined {
+  if (!isFree(plan)) return undefined;
+  const idle = idleDaysOf(lastAt, now);
+  if (idle < IDLE_WARN_DAYS) return undefined;
+  const since = lastAt ? `No API requests for ${idle} days` : `No API requests in the last ${PAUSE_AFTER_DAYS} days`;
+  return `${since}: Supabase pauses a free project after a week without activity. Use the app or open the project in Supabase to keep it running`;
+}
+
+async function planOf(auth: ServiceAuth, project: Project): Promise<string | undefined> {
+  const slug = project.organization_slug ?? project.organization_id;
+  if (!slug) return undefined;
+  return (await sb<Org>(auth, `/organizations/${encodeURIComponent(slug)}`, 6 * 60 * 60_000)).plan;
+}
+
+async function counts(auth: ServiceAuth, ref: string): Promise<CountRow[]> {
+  const body = await sb<Counts>(auth, `/projects/${encodeURIComponent(ref)}/analytics/endpoints/usage.api-counts?interval=7day`, 10 * 60_000);
+  if (body.error) throw new Error(`Supabase couldn't count the requests: ${(typeof body.error === "string" ? body.error : JSON.stringify(body.error)).slice(0, 200)}`);
+  return body.result ?? [];
+}
+
+// What a part that couldn't be read says instead.
+const unread = (what: string, permission: string) => (err: unknown) =>
+  err instanceof ProviderError && (err.status === 401 || err.status === 403)
+    ? `${what} not shown: the token lacks ${permission}`
+    : `${what} not shown: ${(err as Error).message}`;
+
+const dashboard = (ref: string, path = "") => `https://supabase.com/dashboard/project/${encodeURIComponent(ref)}${path}`;
+
 export const supabase: Integration = {
   ...described("supabase"),
 
@@ -220,10 +311,53 @@ export const supabase: Integration = {
       }
       const bad = unhealthyServices(health);
       if (bad.length) return { state: "down", at, detail: `Unhealthy: ${bad.join(", ")}`, summary: `Unhealthy: ${bad.join(", ")}` };
+      // A free project close to being paused for being idle: it serves now,
+      // but won't for long. Reading this can't cost the verdict.
+      const now = Date.now();
+      const plan = await planOf(auth, project).catch(() => undefined);
+      const idle = isFree(plan) ? await counts(auth, conn.resource).then((rows) => idleWarning(plan, requestsByDay(rows, now).lastAt, now)).catch(() => undefined) : undefined;
+      if (idle) return { state: "down", at, detail: idle, summary: "Running · idle, so it may be paused", link: { url: dashboard(conn.resource), label: "Open the project in Supabase" } };
       return { state: "up", at, summary: `Running · ${health.map((h) => h.name).join(", ")} healthy` };
     } catch (err) {
       return { state: "unknown", at, detail: (err as Error).message };
     }
+  },
+
+  // The app page's database panel. Each part is read on its own: one the
+  // token can't read is left out and said, never shown as zero.
+  async details(conn, auth): Promise<DatabaseDetails> {
+    const ref = encodeURIComponent(conn.resource);
+    const now = Date.now();
+    const project = await sb<Project>(auth, `/projects/${ref}`);
+    const notes: string[] = [];
+    const part = <T>(p: Promise<T>, said: (err: unknown) => string) =>
+      p.catch((err: unknown) => {
+        notes.push(said(err));
+        return undefined;
+      });
+    const [plan, rows, fns, backups] = await Promise.all([
+      part(planOf(auth, project), unread("The plan", "organization read access")),
+      part(counts(auth, conn.resource), unread("Requests", "Analytics usage: read")),
+      part(sb<Fn[]>(auth, `/projects/${ref}/functions`), unread("Edge Functions", "Edge Functions: read")),
+      part(sb<Backups>(auth, `/projects/${ref}/database/backups`), unread("Backups", "Database: read")),
+    ]);
+    const requests = rows && requestsByDay(rows, now);
+    const done = (backups?.backups ?? []).filter((b) => !b.status || b.status === "COMPLETED").map((b) => parseTime(b.inserted_at)).filter((t): t is string => !!t).sort();
+    return {
+      shape: "database",
+      provider: "Supabase",
+      project: project.name,
+      status: describeStatus(project.status).text,
+      ...(plan ? { plan } : {}),
+      ...(project.region ? { region: project.region } : {}),
+      ...(project.database?.version ? { postgres: project.database.version } : {}),
+      ...(requests ? { requests } : {}),
+      ...(requests && isFree(plan) ? { pausesWhenIdle: { afterDays: PAUSE_AFTER_DAYS, idleDays: idleDaysOf(requests.lastAt, now) } } : {}),
+      ...(fns ? { functions: fns.map((f) => ({ name: f.name, slug: f.slug, status: f.status, version: f.version, ...(f.updated_at ? { updatedAt: new Date(f.updated_at).toISOString() } : {}) })).sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")) } : {}),
+      ...(backups ? { backups: { pitr: backups.pitr_enabled === true, count: done.length, ...(done.length ? { latest: done.at(-1)! } : {}) } } : {}),
+      notes,
+      link: { url: dashboard(conn.resource), label: "Open in Supabase" },
+    };
   },
 
   // Supabase's security advisors for the project. A paused project can't be

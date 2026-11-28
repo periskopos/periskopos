@@ -199,6 +199,46 @@ describe("Overview", () => {
     assert.match(text(draw(overview(page({ app: withStripe, details: failed }), withStripe)).querySelector("[aria-labelledby=s-payments]")), /Stripe rejected the key/);
   });
 
+  test("Database (Supabase): plan, requests, a free project's pause, functions, backups, and what couldn't be read", () => {
+    const withDb: App = { ...app, connections: [...app.connections, { id: "c_db", appId: "a_1", type: "supabase", serviceId: "s_sb", resource: "abcdefghijklmnopqrst", settings: { name: "star-db" } }] };
+    const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+    const days = [6, 5, 4, 3, 2, 1, 0].map((n) => ({ day: day(n), rest: n === 6 ? 1500 : 0, auth: n === 6 ? 20 : 0, storage: 0, realtime: 0 }));
+    const d = details();
+    d.set("c_db", {
+      shape: "database",
+      provider: "Supabase",
+      project: "star-db",
+      status: "Running",
+      plan: "free",
+      region: "eu-central-1",
+      postgres: "17.4.1.054",
+      requests: { days, total: 1520, lastAt: ago(6 * 24 * 60) },
+      pausesWhenIdle: { afterDays: 7, idleDays: 6 },
+      functions: [{ name: "send-mail", slug: "send-mail", status: "ACTIVE", version: 3, updatedAt: ago(90) }],
+      backups: { pitr: false, count: 0 },
+      notes: ["Requests by kind not shown: the token lacks Analytics usage: read"],
+      link: { url: "https://supabase.com/dashboard/project/abcdefghijklmnopqrst", label: "Open in Supabase" },
+    });
+    const root = draw(overview(page({ app: withDb, details: d }), withDb));
+    const db = root.querySelector("[aria-labelledby=s-database]");
+    assert.ok(db, "Database");
+    const t = text(db);
+    assert.match(t, /Open in Supabase/);
+    assert.match(t, /Plan\s*Free\s*eu-central-1 · Postgres 17\.4(?!\.)/, "the major and minor version only");
+    assert.match(t, /API requests · 7 days\s*1\.5k\s*last 6 d ago/);
+    assert.match(t, /Edge Functions\s*1\s*last deployed/);
+    assert.match(t, /Backups\s*None\s*not on the free plan/);
+    assert.match(t, /Free plan: Supabase pauses the project after 7 days without activity\. Last API request 6 d ago/);
+    assert.ok(isThere(db.querySelector(".reason--attention")), "a day from being paused is said in the attention colour");
+    assert.match(t, /send-mail.*version 3/);
+    assert.match(t, /the token lacks Analytics usage: read\./);
+    assert.deepEqual(unnamed(root), []);
+
+    const failed = details();
+    failed.set("c_db", new Error("Supabase rejected the token (401)"));
+    assert.match(text(draw(overview(page({ app: withDb, details: failed }), withDb)).querySelector("[aria-labelledby=s-database]")), /Supabase rejected the token/);
+  });
+
   test("Errors (Sentry): unresolved issues, those since the last deploy marked, a link to Sentry", () => {
     const withSentry: App = { ...app, connections: [...app.connections, { id: "c_sentry", appId: "a_1", type: "sentry", serviceId: "s_sn", resource: "acme/star-map", settings: { name: "star-map" } }] };
     const d = details();

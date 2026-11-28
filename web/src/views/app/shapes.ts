@@ -23,6 +23,7 @@ export function shapesOf(page: AppPage, a: App) {
     errors: showing("errors"),
     payments: showing("payments"),
     logs: showing("logs"),
+    database: showing("database"),
   };
 }
 

@@ -4,6 +4,7 @@ import { h, safeHref } from "../../dom.ts";
 import { STATE_LABEL, hostOf } from "../../format.ts";
 import { empty, ext, lamp, section, timeAgo } from "../../ui.ts";
 import { metricsSection } from "../protocolParts.ts";
+import { databaseSection } from "./database.ts";
 import { paymentsSection } from "./payments.ts";
 import { figuresStrip } from "./figures.ts";
 import { getMoreSection } from "./getMore.ts";
@@ -17,7 +18,7 @@ export function overview(page: AppPage, a: App) {
   const { base, status, hist, details, protocol, suggestions } = page;
   const checks = a.connections.filter((c) => c.type !== "link");
   const links = a.connections.filter((c) => c.type === "link");
-  const { deploys, commits, payments } = shapesOf(page, a);
+  const { deploys, commits, payments, database } = shapesOf(page, a);
 
   // What it's made of on the left, what happened to it on the right, when
   // the page has the room for both (.overview-grid); one under the other
@@ -31,6 +32,8 @@ export function overview(page: AppPage, a: App) {
     getMoreSection(suggestions, `${base}/settings/connections`, page.connectSuggested),
 
     payments && paymentsSection(payments.d),
+
+    database && databaseSection(database.d),
 
     !(deploys || commits) &&
       !suggestions?.length &&

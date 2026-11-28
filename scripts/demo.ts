@@ -391,6 +391,36 @@ function checkOf(conn: Connection): CheckResult {
   }
 }
 
+// A free Supabase project in daily use: its requests rise in the week, two
+// Edge Functions beside it, and no backups, as on the free plan.
+function databaseOf(conn: Connection): ConnectionDetails {
+  const days = [6, 5, 4, 3, 2, 1, 0].map((n, i) => ({
+    day: new Date(Date.now() - n * DAY).toISOString().slice(0, 10),
+    rest: [8200, 9100, 7600, 10400, 12900, 11800, 6100][i]!,
+    auth: [410, 380, 450, 520, 610, 590, 300][i]!,
+    storage: [90, 120, 80, 140, 160, 150, 70][i]!,
+    realtime: [30, 20, 40, 60, 50, 70, 20][i]!,
+  }));
+  return {
+    shape: "database",
+    provider: "Supabase",
+    project: conn.resource,
+    status: "Running",
+    plan: "free",
+    region: "eu-central-1",
+    postgres: "17.4.1.054",
+    requests: { days, total: days.reduce((t, d) => t + d.rest + d.auth + d.storage + d.realtime, 0), lastAt: new Date(Date.now() - 4 * MIN).toISOString() },
+    pausesWhenIdle: { afterDays: 7, idleDays: 0 },
+    functions: [
+      { name: "send-digest", slug: "send-digest", status: "ACTIVE", version: 12, updatedAt: new Date(Date.now() - 2 * DAY).toISOString() },
+      { name: "bounce-webhook", slug: "bounce-webhook", status: "ACTIVE", version: 4, updatedAt: new Date(Date.now() - 9 * DAY).toISOString() },
+    ],
+    backups: { pitr: false, count: 0 },
+    notes: [],
+    link: { url: "https://example.com/", label: "Open in Supabase" },
+  };
+}
+
 function detailsOf(conn: Connection): ConnectionDetails {
   const p = planOf(conn);
   switch (conn.type) {
@@ -402,6 +432,8 @@ function detailsOf(conn: Connection): ConnectionDetails {
       return errorsOf(conn);
     case "stripe":
       return payments;
+    case "supabase":
+      return databaseOf(conn);
     default: {
       const host = p.host!;
       const provider = HOST_LABEL[host];

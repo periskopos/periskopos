@@ -2,7 +2,7 @@ import type { LogLine } from "../../../shared/types.ts";
 import { getJson, ProviderError } from "../../http.ts";
 import { logsIntegration } from "../logs.ts";
 import type { LogReader } from "../logs.ts";
-import { supabase } from "../supabase.ts";
+import { parseTime, supabase } from "../supabase.ts";
 
 // A Supabase project's errors, through the Management API's logs endpoint
 // (GET /v1/projects/{ref}/analytics/endpoints/logs; logs.all, its BigQuery
@@ -52,19 +52,7 @@ export type SbRow = {
   function_id?: string;
 };
 
-// "2026-08-22T00:13:07.000000" (UTC, no offset), "2026-08-22 00:13:07", or
-// microseconds since 1970 as logs.all gave them.
-export function parseTime(t: unknown): string | undefined {
-  if (typeof t === "number" && Number.isFinite(t)) {
-    const ms = t > 1e14 ? t / 1000 : t > 1e11 ? t : t * 1000;
-    return new Date(ms).toISOString();
-  }
-  if (typeof t !== "string" || !t.trim()) return undefined;
-  let s = t.trim().replace(" ", "T").replace(/(\.\d{3})\d+/, "$1");
-  if (!/(Z|[+-]\d\d:?\d\d)$/i.test(s)) s += "Z";
-  const ms = Date.parse(s);
-  return Number.isNaN(ms) ? undefined : new Date(ms).toISOString();
-}
+export { parseTime } from "../supabase.ts";
 
 const SOURCES: Record<string, string> = {
   postgres_logs: "postgres",

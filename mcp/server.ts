@@ -79,7 +79,7 @@ export function createMcpServer(gc: PeriskoposClient, { progressEveryMs = 15_000
     {
       title: "Get one app",
       description:
-        "Everything about one app: its checks (site, SSL, domain, GitHub, Cloudflare, Render, Supabase, Search Console) with the latest result, whether the last push is live, recent deploys, commits and CI runs, how it does in Google Search (clicks, impressions, position, top queries), recent incidents, providers with an incident that affects it, and recent actions run on it.",
+        "Everything about one app: its checks (site, SSL, domain, GitHub, Cloudflare, Render, Supabase, Search Console) with the latest result, whether the last push is live, recent deploys, commits and CI runs, how it does in Google Search (clicks, impressions, position, top queries), its Supabase database (plan, API requests over 7 days, whether a free project is close to being paused, Edge Functions, backups), recent incidents, providers with an incident that affects it, and recent actions run on it.",
       inputSchema: { slug },
       annotations: { title: "Get one app", ...readOnly },
     },
@@ -100,7 +100,7 @@ export function createMcpServer(gc: PeriskoposClient, { progressEveryMs = 15_000
         const details = (
           await Promise.all(
             app.connections
-              .filter((c) => CONNECTIONS[c.type]?.role !== undefined || ["search", "errors", "payments", "logs"].includes(CONNECTIONS[c.type]?.shows ?? ""))
+              .filter((c) => CONNECTIONS[c.type]?.role !== undefined || ["search", "errors", "payments", "logs", "database"].includes(CONNECTIONS[c.type]?.shows ?? ""))
               .map((c) =>
                 gc.get<{ details: ConnectionDetails }>(`${base}/connections/${encodeURIComponent(c.id)}/details`).then(
                   (r) => r.details,
