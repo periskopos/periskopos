@@ -4,7 +4,7 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
-## Next release
+## 0.5.4 (2026-11-28)
 
 - **Supabase on the app page:** a Database panel with the project's plan, region and
   Postgres version, its API requests over the last 7 days (a chart by kind), its Edge
