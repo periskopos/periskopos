@@ -4,7 +4,7 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
-## Next release
+## 0.5.5 (2026-11-28)
 
 - **Supabase users, counted:** the Database panel shows how many sign-in users the project
   has, how many signed up and signed in over the last 7 days, and how many never confirmed,
