@@ -216,6 +216,7 @@ describe("Overview", () => {
       pausesWhenIdle: { afterDays: 7, idleDays: 6 },
       functions: [{ name: "send-mail", slug: "send-mail", status: "ACTIVE", version: 3, updatedAt: ago(90) }],
       backups: { pitr: false, count: 0 },
+      users: { total: 1284, new7d: 46, active7d: 412, unconfirmed: 19 },
       notes: ["Requests by kind not shown: the token lacks Analytics usage: read"],
       link: { url: "https://supabase.com/dashboard/project/abcdefghijklmnopqrst", label: "Open in Supabase" },
     });
@@ -230,6 +231,11 @@ describe("Overview", () => {
     assert.match(t, /Backups\s*None\s*not on the free plan/);
     assert.match(t, /Free plan: Supabase pauses the project after 7 days without activity\. Last API request 6 d ago/);
     assert.ok(isThere(db.querySelector(".reason--attention")), "a day from being paused is said in the attention colour");
+    assert.match(t, /Users\s*1,284\s*19 never confirmed/);
+    assert.match(t, /New · 7 days\s*46/);
+    assert.match(t, /Signed in · 7 days\s*412\s*32% of users/);
+    assert.match(t, /Counts only: who they are stays in Supabase\. Users in Supabase/);
+    assert.ok(isThere(db.querySelector('a[href="https://supabase.com/dashboard/project/abcdefghijklmnopqrst/auth/users"]')), "a link to Supabase's own Users page");
     assert.match(t, /send-mail.*version 3/);
     assert.match(t, /the token lacks Analytics usage: read\./);
     assert.deepEqual(unnamed(root), []);

@@ -382,6 +382,7 @@ export type DatabaseDetails = {
   pausesWhenIdle?: { afterDays: number; idleDays: number }; // a free project, paused after a week without activity
   functions?: { name: string; slug: string; status: string; version: number; updatedAt?: string }[];
   backups?: { pitr: boolean; count: number; latest?: string };
+  users?: { total: number; new7d: number; active7d: number; unconfirmed: number }; // counts only, never who
   notes: string[];
   link: DetailsLink;
 };

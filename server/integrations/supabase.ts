@@ -1,13 +1,14 @@
 import type { AuditResult, CheckResult, DatabaseDetails, DatabaseRequestsDay, FindingDraft, FindingSeverity } from "../../shared/types.ts";
 import { badRequest } from "../errors.ts";
-import { ProviderError, getJson } from "../http.ts";
+import { ProviderError, getJson, readByPost } from "../http.ts";
 import { requiredText } from "../validate.ts";
 import { described } from "./types.ts";
 import type { Integration, ServiceAuth } from "./types.ts";
 
 // Supabase project health (PRD §7.4): is the project running (free
 // projects get paused), and are its services healthy? Reads only: the
-// access token can't be limited to read-only, so only GET endpoints are used.
+// access token can't be limited to read-only, so only GET endpoints are used,
+// and the read-only SQL endpoint for user counts (USERS_SQL).
 
 const API = "https://api.supabase.com/v1";
 
@@ -256,6 +257,24 @@ async function counts(auth: ServiceAuth, ref: string): Promise<CountRow[]> {
   return body.result ?? [];
 }
 
+// How many people use the app, never who: counts from auth.users through
+// Supabase's read-only SQL (it runs as supabase_read_only_user, which can't
+// change anything). It's the one POST this integration sends.
+export const USERS_SQL = `select count(*)::int as total,
+  count(*) filter (where created_at > now() - interval '7 days')::int as new_7d,
+  count(*) filter (where last_sign_in_at > now() - interval '7 days')::int as active_7d,
+  count(*) filter (where email_confirmed_at is null and phone_confirmed_at is null)::int as unconfirmed
+from auth.users`;
+type UsersRow = { total?: number; new_7d?: number; active_7d?: number; unconfirmed?: number };
+
+async function users(auth: ServiceAuth, ref: string): Promise<NonNullable<DatabaseDetails["users"]>> {
+  const rows = await readByPost<UsersRow[]>(`${API}/projects/${encodeURIComponent(ref)}/database/query/read-only`, { query: USERS_SQL }, { token: await auth.token(), provider: "Supabase", ttlMs: 30 * 60_000 });
+  const r = Array.isArray(rows) ? rows[0] : undefined;
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : Number(x));
+  if (!r || !Number.isFinite(n(r.total))) throw new Error("Supabase's answer had no counts");
+  return { total: n(r.total), new7d: n(r.new_7d) || 0, active7d: n(r.active_7d) || 0, unconfirmed: n(r.unconfirmed) || 0 };
+}
+
 // What a part that couldn't be read says instead.
 const unread = (what: string, permission: string) => (err: unknown) =>
   err instanceof ProviderError && (err.status === 401 || err.status === 403)
@@ -335,11 +354,12 @@ export const supabase: Integration = {
         notes.push(said(err));
         return undefined;
       });
-    const [plan, rows, fns, backups] = await Promise.all([
+    const [plan, rows, fns, backups, people] = await Promise.all([
       part(planOf(auth, project), unread("The plan", "organization read access")),
       part(counts(auth, conn.resource), unread("Requests", "Analytics usage: read")),
       part(sb<Fn[]>(auth, `/projects/${ref}/functions`), unread("Edge Functions", "Edge Functions: read")),
       part(sb<Backups>(auth, `/projects/${ref}/database/backups`), unread("Backups", "Database: read")),
+      part(users(auth, conn.resource), unread("Users", "Database: read")),
     ]);
     const requests = rows && requestsByDay(rows, now);
     const done = (backups?.backups ?? []).filter((b) => !b.status || b.status === "COMPLETED").map((b) => parseTime(b.inserted_at)).filter((t): t is string => !!t).sort();
@@ -355,6 +375,7 @@ export const supabase: Integration = {
       ...(requests && isFree(plan) ? { pausesWhenIdle: { afterDays: PAUSE_AFTER_DAYS, idleDays: idleDaysOf(requests.lastAt, now) } } : {}),
       ...(fns ? { functions: fns.map((f) => ({ name: f.name, slug: f.slug, status: f.status, version: f.version, ...(f.updated_at ? { updatedAt: new Date(f.updated_at).toISOString() } : {}) })).sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")) } : {}),
       ...(backups ? { backups: { pitr: backups.pitr_enabled === true, count: done.length, ...(done.length ? { latest: done.at(-1)! } : {}) } } : {}),
+      ...(people ? { users: people } : {}),
       notes,
       link: { url: dashboard(conn.resource), label: "Open in Supabase" },
     };

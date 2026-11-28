@@ -4,6 +4,14 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
+## Next release
+
+- **Supabase users, counted:** the Database panel shows how many sign-in users the project
+  has, how many signed up and signed in over the last 7 days, and how many never confirmed,
+  with a link to Supabase's own Users page. Counts only: no email or name ever leaves
+  Supabase. They're read through Supabase's read-only SQL endpoint, the one request to
+  Supabase that isn't a GET, and it can't change anything.
+
 ## 0.5.4 (2026-11-28)
 
 - **Supabase on the app page:** a Database panel with the project's plan, region and

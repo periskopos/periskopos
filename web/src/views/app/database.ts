@@ -60,6 +60,21 @@ function pauseLine(p: NonNullable<DatabaseDetails["pausesWhenIdle"]>, lastAt: st
   );
 }
 
+// How many people use the app, never who: Supabase's own Users page is a click away.
+function usersFigures(u: NonNullable<DatabaseDetails["users"]>, dashboard: string) {
+  // Siblings of the panel's other parts, not a box of their own, so they line up.
+  return [
+    h(
+      "div",
+      { class: "figures", role: "group", "aria-label": "Sign-in users" },
+      figure("Users", u.total.toLocaleString(), u.unconfirmed ? `${u.unconfirmed.toLocaleString()} never confirmed` : "all confirmed"),
+      figure("New · 7 days", u.new7d.toLocaleString(), "signed up"),
+      figure("Signed in · 7 days", u.active7d.toLocaleString(), u.total ? `${Math.round((u.active7d / u.total) * 100)}% of users` : "no users yet"),
+    ),
+    h("p", { class: "meta" }, "Counts only: who they are stays in Supabase. ", ext(`${dashboard}/auth/users`, "Users in Supabase")),
+  ];
+}
+
 function functionsList(fns: NonNullable<DatabaseDetails["functions"]>) {
   return h(
     "ul",
@@ -101,6 +116,7 @@ export function databaseSection(d: DatabaseDetails | Error | undefined) {
         ),
       ),
       loaded.pausesWhenIdle && pauseLine(loaded.pausesWhenIdle, requests?.lastAt),
+      loaded.users && usersFigures(loaded.users, loaded.link.url),
       requests && requests.total > 0 && requestsChart(requests.days),
       functions && functions.length > 0 && functionsList(functions),
       loaded.notes.length > 0 && h("p", { class: "meta" }, loaded.notes.join(". "), "."),

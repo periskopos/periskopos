@@ -103,6 +103,25 @@ export async function queryJson<T>(
   return value;
 }
 
+// A read that a provider only offers as a POST (Supabase's read-only SQL),
+// cached like getJson. Only for endpoints that can't change anything.
+export async function readByPost<T>(
+  url: string,
+  body: unknown,
+  { token, ttlMs = 60_000, provider }: { token: string; ttlMs?: number; provider: string },
+): Promise<T> {
+  const key = createHash("sha256").update(`${token}
+${url}
+${JSON.stringify(body)}`).digest("hex");
+  const hit = cache.get(key);
+  if (hit && hit.until > Date.now()) return hit.value as Promise<T>;
+  const value = postJson<T>(url, body, { token, provider });
+  if (cache.size >= MAX_ENTRIES) cache.clear();
+  cache.set(key, { until: Date.now() + ttlMs, value });
+  value.catch(() => cache.delete(key));
+  return value;
+}
+
 // POST JSON (an action). Never cached, never retried.
 export async function postJson<T>(
   url: string,

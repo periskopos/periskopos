@@ -171,6 +171,7 @@ export function appDetail(input: {
             ...(database.pausesWhenIdle ? { freePlanPause: `Paused after ${database.pausesWhenIdle.afterDays} days without activity; ${database.pausesWhenIdle.idleDays} days without API requests now` } : {}),
             ...(database.functions ? { edgeFunctions: database.functions.map((f) => ({ name: f.name, status: f.status, version: f.version, ...(f.updatedAt ? { updatedAt: f.updatedAt } : {}) })) } : {}),
             ...(database.backups ? { backups: database.backups } : {}),
+            ...(database.users ? { signInUsers: { total: database.users.total, newLast7d: database.users.new7d, signedInLast7d: database.users.active7d, neverConfirmed: database.users.unconfirmed } } : {}),
             ...(database.notes.length ? { notShown: database.notes } : {}),
           },
         }

@@ -416,6 +416,7 @@ function databaseOf(conn: Connection): ConnectionDetails {
       { name: "bounce-webhook", slug: "bounce-webhook", status: "ACTIVE", version: 4, updatedAt: new Date(Date.now() - 9 * DAY).toISOString() },
     ],
     backups: { pitr: false, count: 0 },
+    users: { total: 1284, new7d: 46, active7d: 412, unconfirmed: 19 },
     notes: [],
     link: { url: "https://example.com/", label: "Open in Supabase" },
   };

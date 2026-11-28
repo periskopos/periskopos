@@ -19,15 +19,17 @@ const REF = "abcdefghijklmnopqrst";
 const auth = { service: { id: "s", ownerId: "u", type: "supabase", name: "Supabase", canWrite: false }, token: async () => "test-token" } as ServiceAuth;
 const conn: Connection = { id: "c", appId: "a", type: "supabase", serviceId: "s", resource: REF, settings: { name: "shop" } };
 
-type Fake = { plan: string; counts: unknown; functions: unknown; backups: unknown; health: unknown };
+type Fake = { plan: string; counts: unknown; functions: unknown; backups: unknown; health: unknown; users: unknown };
 let fake: Fake;
 let methods: string[];
+let sql: string[];
 const realFetch = globalThis.fetch;
 const project = { id: REF, ref: REF, name: "shop", region: "eu-central-1", status: "ACTIVE_HEALTHY", organization_id: "acme-org", organization_slug: "acme-org", database: { version: "17.4.1.054" } };
 
 beforeEach(() => {
   clearHttpCache();
   methods = [];
+  sql = [];
   // A project in use today on the free plan.
   fake = {
     plan: "free",
@@ -38,10 +40,13 @@ beforeEach(() => {
     ],
     backups: { region: "eu-central-1", walg_enabled: false, pitr_enabled: false, backups: [] },
     health: [{ name: "auth", healthy: true }, { name: "db", healthy: true }, { name: "rest", healthy: true }],
+    users: [{ total: 1284, new_7d: 46, active_7d: 412, unconfirmed: 19 }],
   };
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input instanceof Request ? input.url : input));
-    methods.push(init?.method ?? "GET");
+    const method = init?.method ?? "GET";
+    // The one POST allowed: Supabase's read-only SQL, for user counts.
+    methods.push(method === "POST" && url.pathname === `/v1/projects/${REF}/database/query/read-only` ? "READ-ONLY SQL" : method);
     const answer = (x: unknown) => (typeof x === "number" ? json({ message: "Forbidden" }, x) : json(x));
     const p = url.pathname;
     if (p === "/v1/projects") return json([project]);
@@ -54,11 +59,15 @@ beforeEach(() => {
     if (p === `/v1/projects/${REF}/functions`) return answer(fake.functions);
     if (p === `/v1/projects/${REF}/database/backups`) return answer(fake.backups);
     if (p === `/v1/projects/${REF}/health`) return json(fake.health);
+    if (p === `/v1/projects/${REF}/database/query/read-only`) {
+      sql.push((JSON.parse(String(init?.body)) as { query: string }).query);
+      return typeof fake.users === "number" ? json({ message: "Forbidden" }, fake.users) : json(fake.users, 201);
+    }
     return json({ message: "Not Found" }, 404);
   }) as typeof fetch;
 });
 afterEach(() => {
-  assert.ok(methods.every((m) => m === "GET"), "only GET");
+  assert.ok(methods.every((m) => m === "GET" || m === "READ-ONLY SQL"), "only GET, and the read-only SQL endpoint");
   globalThis.fetch = realFetch;
 });
 
@@ -141,6 +150,23 @@ describe("the Database panel", () => {
     const d = await read();
     assert.equal(d.pausesWhenIdle, undefined);
     assert.deepEqual(d.backups, { pitr: false, count: 2, latest: "2026-11-28T02:00:00.000Z" });
+  });
+
+  test("users are counts only, from the read-only SQL endpoint, with a query that only reads", async () => {
+    const d = await read();
+    assert.deepEqual(d.users, { total: 1284, new7d: 46, active7d: 412, unconfirmed: 19 });
+    assert.equal(sql.length, 1);
+    assert.match(sql[0]!, /^select count\(\*\)/);
+    assert.doesNotMatch(sql[0]!, /(insert|update|delete|drop|alter|grant|create|truncate)/i);
+    assert.doesNotMatch(sql[0]!, /(email|phone|raw_user_meta_data)\s*(,|from|as)/i, "no column that says who");
+    assert.ok(methods.includes("READ-ONLY SQL"));
+  });
+
+  test("users the token can't read are said, not shown as zero", async () => {
+    fake.users = 403;
+    const d = await read();
+    assert.equal(d.users, undefined);
+    assert.ok(d.notes.includes("Users not shown: the token lacks Database: read"));
   });
 
   test("a part the token can't read is left out and said, the rest still shown", async () => {
