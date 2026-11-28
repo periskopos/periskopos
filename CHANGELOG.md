@@ -4,7 +4,7 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
-## Next release
+## 0.5.2 (2026-11-28)
 
 - **Clearer "needs attention":** red CI now says why. When GitHub never started the jobs
   because of the account's billing or Actions spending limit, it says so (not a problem in
