@@ -448,7 +448,15 @@ export class Watcher {
       await this.#trackSlow(app, conn, result, slow, name);
       return;
     }
+    // Not an outage (those count against uptime, and start when seen): the
+    // provider's own start, the failed run, if it's earlier than Periskopos saw.
+    const backdate = (startedAt: string) =>
+      (integration?.incidentKind ?? "outage") !== "outage" && result.since && result.since < startedAt ? result.since : undefined;
     if (open) {
+      // The same problem, better said (why CI failed), or older than first seen.
+      const reason = open.kind !== "expiry" && result.state === "down" && result.detail && result.detail !== open.reason ? result.detail : undefined;
+      const startedAt = backdate(open.startedAt);
+      if (reason || startedAt) history.reviseIncident(this.#db, open.id, { ...(reason ? { reason } : {}), ...(startedAt ? { startedAt } : {}) });
       // A certificate or domain that was about to expire and now has: that's
       // news, not more of the same. The warning ends and the expiry opens in
       // its place, so it's notified.
@@ -473,7 +481,7 @@ export class Watcher {
       appId: app.id,
       connectionId: conn.id,
       kind: integration?.incidentKind ?? "outage",
-      startedAt: needed > 1 ? previous!.at : result.at,
+      startedAt: backdate(needed > 1 ? previous!.at : result.at) ?? (needed > 1 ? previous!.at : result.at),
       reason: result.detail ?? "Not responding",
     });
     await this.#notify(app, alertKindOf(integration?.incidentKind), words("down", incident.reason, 0));

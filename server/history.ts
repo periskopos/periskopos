@@ -181,6 +181,13 @@ export function openIncident(
   return incident;
 }
 
+// The same problem, better said or found to have begun earlier: an open
+// incident's words and start move without a new notification.
+export function reviseIncident(db: DatabaseSync, id: string, change: { reason?: string; startedAt?: string }) {
+  if (change.reason !== undefined) db.prepare("UPDATE incidents SET reason = ? WHERE id = ?").run(change.reason, id);
+  if (change.startedAt !== undefined) db.prepare("UPDATE incidents SET started_at = ? WHERE id = ?").run(change.startedAt, id);
+}
+
 export function closeIncident(db: DatabaseSync, id: string, endedAt: string) {
   db.prepare("UPDATE incidents SET ended_at = ? WHERE id = ?").run(endedAt, id);
 }

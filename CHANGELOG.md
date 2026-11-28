@@ -4,6 +4,16 @@ Each release's notes, generated from its commits, are on
 [GitHub Releases](https://github.com/periskopos/periskopos/releases). This
 file records the larger steps.
 
+## Next release
+
+- **Clearer "needs attention":** red CI now says why. When GitHub never started the jobs
+  because of the account's billing or Actions spending limit, it says so (not a problem in
+  the code) with an **Open GitHub billing** button. Otherwise it names the failed job and
+  step, with a button to that job.
+- The same problem on several apps (GitHub billing stopping CI on every repository) is one
+  item naming each app, not one per app.
+- A CI problem shows when it really began (the failed run), not when Periskopos first saw it.
+
 ## 0.5.1 (2026-11-23)
 
 - The README shows the M8ven trust badge for the MCP server.

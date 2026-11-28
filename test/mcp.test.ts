@@ -15,6 +15,7 @@ import { StatusService } from "../server/status.ts";
 import { updateSettings } from "../server/settings.ts";
 import * as store from "../server/store.ts";
 import { Watcher } from "../server/watcher.ts";
+import { BILLING_TEXT } from "../server/integrations/github.ts";
 import { PeriskoposClient, PeriskoposError, tokenFolders } from "../mcp/client.ts";
 import { trafficDetail } from "../mcp/shape.ts";
 import { installedAppDataDir } from "../server/config.ts";
@@ -40,6 +41,7 @@ let deploys: unknown[];
 let ghRuns: unknown[];
 let ghJobs: unknown[];
 let ghLogs: Record<string, string | number>;
+let ghAnnotations: unknown[] | number;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -60,6 +62,7 @@ beforeEach(() => {
   ghRuns = [];
   ghJobs = [];
   ghLogs = {};
+  ghAnnotations = [];
   deploys = [{ id: "dep-1", status: "live", commit: { id: "bbb2222", message: "ship it", createdAt: iso(2 * H) }, createdAt: iso(2 * H), finishedAt: iso(2 * H - 120_000) }];
   // Providers' APIs (Render, GitHub) are faked; Periskopos's own app is called in-process.
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -81,6 +84,8 @@ beforeEach(() => {
         return new Response(answer ?? "", { headers: { "content-type": "text/plain" } });
       }
       if (url.pathname.includes("/compare/")) return json({ status: "ahead" });
+      if (/\/check-runs\/\d+\/annotations$/.test(url.pathname)) return typeof ghAnnotations === "number" ? json({ message: "Forbidden" }, ghAnnotations) : json(ghAnnotations);
+      if (url.pathname === "/users/o") return json({ login: "o", type: "Organization" });
     }
     return json({ message: "Not Found" }, 404);
   }) as typeof fetch;
@@ -640,6 +645,60 @@ describe("check_app", () => {
     assert.equal(github(again).problem, "CI failing on main", "a workflow named CI isn't named twice");
     assert.equal(github(again).seeWhy, failingRun.html_url);
     assert.equal(again.text.includes(GITHUB_KEY) || again.text.includes(RENDER_KEY), false);
+  });
+
+  // Jobs GitHub never started (no steps) failed for billing: no code is at
+  // fault, and the fix is the account's billing page, not the run.
+  const unstarted = (id: number) => ({ id, name: `job ${id}`, status: "completed", conclusion: "failure", html_url: `https://github.com/o/r/actions/runs/77/job/${id}`, steps: [] });
+
+  test("CI GitHub didn't run for billing says so, links to billing, and dates from the run", async () => {
+    ghRuns = [failingRun];
+    ghJobs = [unstarted(1), unstarted(2)];
+    ghAnnotations = [{ message: "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings" }];
+    const r = await call(await connect(), "check_app", { slug: "star-map" });
+    assert.equal(github(r).state, "down");
+    assert.equal(github(r).problem, BILLING_TEXT);
+    assert.equal(github(r).seeWhy, "https://github.com/organizations/o/settings/billing");
+    const recorded = history.latestCheck(db, app.connections.find((c) => c.type === "github")!.id)!;
+    assert.equal(recorded.link?.label, "Open GitHub billing");
+  });
+
+  test("unstarted jobs without GitHub's words (no Checks permission) still say no step ran", async () => {
+    ghRuns = [failingRun];
+    ghJobs = [unstarted(1)];
+    ghAnnotations = 403;
+    const r = await call(await connect(), "check_app", { slug: "star-map" });
+    assert.match(github(r).problem!, /^GitHub didn't start CI's jobs \(no step ran/);
+    assert.equal(github(r).seeWhy, failingRun.html_url, "no billing page claimed without GitHub saying so");
+  });
+
+  test("red CI's incident starts at the failed run, and its words follow the better reason", async () => {
+    const client = await connect();
+    ghRuns = [failingRun];
+    await call(client, "check_app", { slug: "star-map" });
+    clearHttpCache();
+    await call(client, "check_app", { slug: "star-map" });
+    const gh = app.connections.find((c) => c.type === "github")!.id;
+    const opened = history.openIncidentFor(db, gh)!;
+    assert.equal(opened.kind, "ci");
+    assert.equal(opened.startedAt, failingRun.created_at, "from the run, not from when Periskopos first saw it");
+    assert.equal(opened.reason, "CI failing on main");
+
+    ghJobs = [unstarted(1)];
+    ghAnnotations = [{ message: "The job was not started because your spending limit needs to be increased." }];
+    clearHttpCache();
+    await call(client, "check_app", { slug: "star-map" });
+    const revised = history.openIncidentFor(db, gh)!;
+    assert.equal(revised.id, opened.id, "the same incident, not a new one");
+    assert.equal(revised.reason, BILLING_TEXT);
+  });
+
+  test("a failed step is named, with a link to its job", async () => {
+    ghRuns = [failingRun];
+    ghJobs = [{ ...unstarted(3), name: "test", steps: [{ name: "Set up job", status: "completed", conclusion: "success" }, { name: "npm test", status: "completed", conclusion: "failure" }] }];
+    const r = await call(await connect(), "check_app", { slug: "star-map" });
+    assert.equal(github(r).problem, 'CI failing on main: job "test" failed at step "npm test"');
+    assert.equal(github(r).seeWhy, "https://github.com/o/r/actions/runs/77/job/3");
   });
 
   test("an unknown app is a clear error", async () => {

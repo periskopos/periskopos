@@ -241,3 +241,44 @@ describe("the bell", () => {
     assert.equal(bell.root.querySelector(".notify-btn")?.getAttribute("aria-label"), "Notifications: Server not reachable");
   });
 });
+
+describe("one problem, said once, with where to fix it", () => {
+  const a = app("a1", "Star-Map");
+  const b = app("a2", "Moon-Base");
+  const c = app("a3", "Shop");
+  const billing = { url: "https://github.com/organizations/o/settings/billing", label: "Open GitHub billing" };
+  const ci = (appId: string, reason: string, minAgo: number) => ({ ...incident(appId, "ci", reason, minAgo), connectionId: `c-${appId}` });
+  const latest = new Map([
+    ["c-a1", { state: "down" as const, at: at(1), link: billing }],
+    ["c-a2", { state: "down" as const, at: at(1), link: billing }],
+    ["c-a3", { state: "down" as const, at: at(1), link: { url: "https://github.com/o/shop/actions/runs/9/job/1", label: "Open the failed job" } }],
+  ]);
+
+  test("the same words and the same fix on several apps are one item naming each app, from the oldest start", () => {
+    const open = new Map([
+      ["a1", ci("a1", "GitHub didn't run CI: billing", 30)],
+      ["a2", ci("a2", "GitHub didn't run CI: billing", 90)],
+      ["a3", ci("a3", 'CI failing on main. test failed at "npm test"', 10)],
+    ]);
+    const { now } = notificationsView([a, b, c], open, [], [], NOW, { latest });
+    assert.equal(now.length, 2);
+    const grouped = now.find((n) => n.apps)!;
+    assert.deepEqual(grouped.apps!.map((x) => x.name).sort(), ["Moon-Base", "Star-Map"]);
+    assert.equal(grouped.since, at(90));
+    assert.deepEqual(grouped.action, billing);
+    assert.equal(grouped.href, "#/");
+    const single = now.find((n) => !n.apps)!;
+    assert.equal(single.title, "Shop");
+    assert.equal(single.action?.label, "Open the failed job");
+  });
+
+  test("the same words with a different fix stay apart, and Periskopos's own items never join an app's", () => {
+    const open = new Map([
+      ["a1", ci("a1", "CI failing on main", 30)],
+      ["a3", ci("a3", "CI failing on main", 30)],
+    ]);
+    const { now } = notificationsView([a, c], open, [], [], NOW, { latest, stoppedSince: at(5) });
+    assert.equal(now.filter((n) => n.apps).length, 0);
+    assert.equal(now.length, 3);
+  });
+});

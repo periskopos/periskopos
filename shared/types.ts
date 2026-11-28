@@ -43,6 +43,7 @@ export type CheckResult = {
   detail?: string; // why it isn't up, in plain words
   summary?: string; // one line whatever the state: "Live: be0dc09 · 2 h ago"
   link?: DetailsLink; // where to see more: the failed build, say
+  since?: string; // when the provider says the problem began (the failed run), if earlier than Periskopos saw it
 };
 
 // "none" = nothing to check. "attention" = the site is up but something
@@ -243,6 +244,8 @@ export type NotificationItem = {
   text: string; // what's wrong
   href: string; // where to look: "#/apps/star-map", "#/services"
   since?: string; // when it started
+  action?: DetailsLink; // the one place to go to fix it: the failed run, the billing page
+  apps?: { name: string; href: string }[]; // the same problem on several apps, said once
   watching?: true; // about Periskopos's own checks or alerts, not an app
   deliberate?: true; // switched off on purpose: listed, not counted in the bell
 };

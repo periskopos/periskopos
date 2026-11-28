@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ACCOUNTS } from "../../shared/catalog.ts";
 import { KEY_WARN_DAYS, daysLeft, duration } from "../../shared/format.ts";
-import type { App, Connection, DeliveryFailure, Incident, NotificationItem, NotificationsView, RecoveredItem, ServiceView } from "../../shared/types.ts";
+import type { App, CheckResult, Connection, DeliveryFailure, Incident, NotificationItem, NotificationsView, RecoveredItem, ServiceView } from "../../shared/types.ts";
 import * as history from "../history.ts";
 import { integrations } from "../integrations/index.ts";
 
@@ -14,14 +14,14 @@ export const RECOVERED_WINDOW_MS = 24 * 60 * 60_000;
 
 export function notificationsFor(db: DatabaseSync, apps: App[], accounts: ServiceView[], now = Date.now(), checks: ChecksHealth = {}): NotificationsView {
   const ids = apps.map((a) => a.id);
-  return notificationsView(apps, history.openIncidents(db, ids), history.endedSince(db, ids, now - RECOVERED_WINDOW_MS), accounts, now, { ...checks, unreadable: history.unknownSince(db, ids) });
+  return notificationsView(apps, history.openIncidents(db, ids), history.endedSince(db, ids, now - RECOVERED_WINDOW_MS), accounts, now, { ...checks, unreadable: history.unknownSince(db, ids), latest: history.latestChecks(db, ids) });
 }
 
 // Whether the checks themselves are running: switched off in Settings, or
 // failing to get through since a given time; which connections' checks can't
 // currently say; and whether I'd hear about a problem: notifications switched
 // off (silent), or the last ones not reaching me (delivery).
-export type ChecksHealth = { off?: boolean; stoppedSince?: string; silent?: boolean; outagesMuted?: boolean; paused?: { all: string; apps: Record<string, string> }; unreadable?: { connectionId: string; since: string; detail?: string; httpStatus?: number }[]; delivery?: DeliveryFailure[] };
+export type ChecksHealth = { off?: boolean; stoppedSince?: string; silent?: boolean; outagesMuted?: boolean; paused?: { all: string; apps: Record<string, string> }; unreadable?: { connectionId: string; since: string; detail?: string; httpStatus?: number }[]; delivery?: DeliveryFailure[]; latest?: Map<string, CheckResult> };
 
 // A check that can't read for a while (a renamed repository, a key that lost
 // a permission) never opens an incident, so left alone it would hide red CI
@@ -75,7 +75,9 @@ export function notificationsView(apps: App[], open: Map<string, Incident>, ende
   for (const a of apps) {
     const incident = open.get(a.id);
     if (!incident) continue;
-    problems.push({ state: incident.kind === "outage" ? "down" : "attention", title: a.name, text: incident.reason, href: appHref(a), since: incident.startedAt });
+    // The one place to fix it, from the check that found it: the billing page, the failed job.
+    const link = incident.connectionId ? checks.latest?.get(incident.connectionId)?.link : undefined;
+    problems.push({ state: incident.kind === "outage" ? "down" : "attention", title: a.name, text: incident.reason, href: appHref(a), since: incident.startedAt, ...(link ? { action: link } : {}) });
   }
   const unreadable = new Map((checks.unreadable ?? []).map((u) => [u.connectionId, u]));
   for (const a of apps) {
@@ -91,13 +93,39 @@ export function notificationsView(apps: App[], open: Map<string, Incident>, ende
     if (problem) problems.push({ state: "attention", title: s.name, text: problem, href: "#/services" });
   }
   // Down before needs-attention, then the longest-standing first.
-  problems.sort((x, y) => Number(y.state === "down") - Number(x.state === "down") || (x.since ?? "").localeCompare(y.since ?? ""));
+  const grouped = groupSame(problems);
+  grouped.sort((x, y) => Number(y.state === "down") - Number(x.state === "down") || (x.since ?? "").localeCompare(y.since ?? ""));
 
   const earlier: RecoveredItem[] = ended.flatMap((i) => {
     const a = byId.get(i.appId);
     return a && i.endedAt ? [{ title: a.name, text: i.reason, href: appHref(a), startedAt: i.startedAt, endedAt: i.endedAt }] : [];
   });
-  return { now: problems, earlier, accountsRead: accounts.every((s) => keyTestedLately(s, now)) };
+  return { now: grouped, earlier, accountsRead: accounts.every((s) => keyTestedLately(s, now)) };
+}
+
+// The same problem on several apps (GitHub billing stopping CI on every
+// repository) is one thing to fix, so it's said once, naming the apps. Only
+// apps' problems with the same words and the same fix: never Periskopos's own.
+export function groupSame(items: NotificationItem[]): NotificationItem[] {
+  const out: NotificationItem[] = [];
+  const byKey = new Map<string, NotificationItem>();
+  for (const n of items) {
+    const appItem = !n.watching && n.href.startsWith("#/apps/");
+    const key = appItem ? `${n.state}
+${n.text}
+${n.action?.url ?? ""}` : undefined;
+    const first = key !== undefined ? byKey.get(key) : undefined;
+    if (!first) {
+      if (key !== undefined) byKey.set(key, n);
+      out.push(n);
+      continue;
+    }
+    const apps = first.apps ?? [{ name: first.title, href: first.href }];
+    apps.push({ name: n.title, href: n.href });
+    const since = [first.since, n.since].filter((x): x is string => !!x).sort()[0];
+    Object.assign(first, { apps, title: apps.map((x) => x.name).join(", "), href: "#/", ...(since ? { since } : {}) });
+  }
+  return out;
 }
 
 // A key whose last test passed lately: what "accounts are fine" can rest on.

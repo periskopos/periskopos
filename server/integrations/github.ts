@@ -252,6 +252,55 @@ async function jobLog(conn: Connection, auth: ServiceAuth, job: GhJob): Promise<
   }
 }
 
+// ── Why a run failed, in a line ────────────────────────────────────────
+// "CI failing: Checks" says nothing to act on. A job with no steps never
+// started, and GitHub says why only in an annotation on it: most often the
+// account's billing (failed payment, spending limit), which no code change
+// fixes. Otherwise the first failed job and the step it failed at.
+
+type GhAnnotation = { message?: string };
+export type RunCause = { kind: "billing" | "not-started" | "step"; text: string; link?: { url: string; label: string } };
+
+export const BILLING_TEXT = "GitHub didn't run CI: the account's payment failed or its Actions spending limit is reached (not a problem in the code)";
+const isBilling = (m: string) => /payments? (have|has) failed|spending limit/i.test(m);
+
+export function billingUrl(owner: string, isOrg: boolean): string {
+  return isOrg ? `https://github.com/organizations/${enc(owner)}/settings/billing` : "https://github.com/settings/billing";
+}
+
+// Pure, for the tests: what the failed jobs (and the first one's
+// annotations) say.
+export function causeOf(jobs: GhJob[], annotations: string[] | undefined, billing: string): RunCause | undefined {
+  if (jobs.length === 0) return undefined;
+  if (jobs.every((j) => (j.steps ?? []).length === 0)) {
+    const said = annotations?.find((m) => m.trim());
+    if (said && isBilling(said)) return { kind: "billing", text: BILLING_TEXT, link: { url: billing, label: "Open GitHub billing" } };
+    const why = said ? `: ${said.trim().replace(/\s+/g, " ").slice(0, 200)}` : " (no step ran, often billing or a spending limit)";
+    return { kind: "not-started", text: `GitHub didn't start CI's jobs${why}` };
+  }
+  const job = jobs.find((j) => j.steps?.some(buildFailed)) ?? jobs[0]!;
+  const step = job.steps?.find(buildFailed);
+  const more = jobs.length > 1 ? ` (and ${jobs.length - 1} more job${jobs.length === 2 ? "" : "s"})` : "";
+  return { kind: "step", text: `job "${job.name}" failed${step ? ` at step "${step.name}"` : ""}${more}`, ...(job.html_url ? { link: { url: job.html_url, label: "Open the failed job" } } : {}) };
+}
+
+async function runCause(conn: Connection, auth: ServiceAuth, run: GhRun): Promise<RunCause | undefined> {
+  const jobs = await failedJobs(conn, auth, run);
+  if (jobs.length === 0) return undefined;
+  let annotations: string[] | undefined;
+  let billing = "https://github.com/settings/billing";
+  if (jobs.every((j) => (j.steps ?? []).length === 0)) {
+    // Needs Checks: Read; without it the cause is said without GitHub's words.
+    annotations = await gh<GhAnnotation[]>(auth, `/repos/${conn.resource}/check-runs/${jobs[0]!.id}/annotations`)
+      .then((list) => list.map((a) => a.message ?? ""))
+      .catch(() => undefined);
+    const owner = conn.resource.split("/")[0]!;
+    const user = await gh<{ type?: string }>(auth, `/users/${enc(owner)}`).catch(() => undefined);
+    billing = billingUrl(owner, user?.type === "Organization");
+  }
+  return causeOf(jobs, annotations, billing);
+}
+
 // ── Configuration checks ───────────────────────────────────────────────
 // How the repository is set up around the app's branch: is it protected,
 // are leaked secrets and vulnerable dependencies caught, and what can a
@@ -591,14 +640,25 @@ export const github: Integration = {
       const change = latest ? `latest change ${latest.sha.slice(0, 7)} ${ago(latest.at)}` : "no commits";
       if (failing.length || builds.length) {
         const names = failing.map((r) => r.name ?? "a workflow").join(", ");
+        // Why, in a line: the first failing run's cause. Reading it can't
+        // cost the verdict, so a failure to read is no cause.
+        const cause = failing[0] ? await runCause(conn, auth, failing[0]).catch(() => undefined) : undefined;
         // A workflow called "CI" isn't named twice: "CI failing on main".
-        const ci = /^ci$/i.test(names) ? `CI failing on ${branch}` : `CI failing on ${branch}: ${names}`;
+        const ci =
+          cause?.kind === "billing" || cause?.kind === "not-started"
+            ? cause.text
+            : /^ci$/i.test(names)
+              ? `CI failing on ${branch}${cause ? `: ${cause.text}` : ""}`
+              : `CI failing on ${branch}: ${names}${cause ? `, ${cause.text}` : ""}`;
         const reasons = [...(failing.length ? [ci] : []), ...builds.map((b) => b.reason)];
-        // One click to why: the failing run on GitHub, or the failed build.
+        // One click to the fix: the billing page, the failed job or run on GitHub, or the failed build.
         const run = failing.find((r) => r.html_url);
         const build = builds.find((b) => b.url);
-        const link = run ? { url: run.html_url!, label: "Open the failed run on GitHub" } : build ? { url: build.url!, label: "Open the failed build on Cloudflare" } : undefined;
-        return { state: "down", at, detail: reasons.join("; "), summary: `${failing.length ? "CI failing" : "Cloudflare build failed"} · ${change}`, ...(link ? { link } : {}) };
+        const link = cause?.link ?? (run ? { url: run.html_url!, label: "Open the failed run on GitHub" } : build ? { url: build.url!, label: "Open the failed build on Cloudflare" } : undefined);
+        // Failing since the oldest of the failing runs, not since Periskopos first saw it.
+        const since = failing.map((r) => r.created_at).filter(Boolean).sort()[0];
+        const summary = cause?.kind === "billing" ? "CI not run: GitHub billing" : failing.length ? "CI failing" : "Cloudflare build failed";
+        return { state: "down", at, detail: reasons.join("; "), summary: `${summary} · ${change}`, ...(link ? { link } : {}), ...(since ? { since } : {}) };
       }
       // Only runs still going, none finished to judge by: no verdict yet.
       if (current.length === 0 && running) return { state: "unknown", at, detail: "CI is running; no run has finished yet", summary: `CI running · ${change}` };

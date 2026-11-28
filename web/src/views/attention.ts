@@ -21,14 +21,25 @@ export function attentionSection(items: NotificationItem[], providers: ProviderS
   });
 }
 
-// An app or an account: what's wrong, linked to where it's fixed.
+// An app or an account: what's wrong, linked to where it's looked at, and a
+// button to where it's fixed (the billing page, the failed job) when the
+// check knows one. The same problem on several apps names each of them.
 function problemItem(n: NotificationItem) {
+  const title = n.apps
+    ? [h("span", null, ...n.apps.flatMap((a, i) => [i ? ", " : "", h("a", { href: a.href }, a.name)]))]
+    : [h("a", { href: n.href }, n.title)];
   return h(
     "li",
     { class: "item" },
     lamp(n.state, { label: STATE_LABEL[n.state] }),
-    h("div", { class: "item-main" }, h("span", { class: "item-title" }, h("a", { href: n.href }, n.title)), h("span", { class: `reason reason--${n.state}` }, n.text)),
-    n.since && h("div", { class: "item-end meta" }, timeAgo(n.since, "started ")),
+    h("div", { class: "item-main" }, h("span", { class: "item-title" }, ...title), h("span", { class: `reason reason--${n.state}` }, n.text)),
+    (n.since || n.action) &&
+      h(
+        "div",
+        { class: "item-end meta" },
+        n.since && timeAgo(n.since, "started "),
+        n.action && h("a", { class: "btn btn--sm", href: n.action.url, target: "_blank", rel: "noopener noreferrer" }, n.action.label, h("span", { "aria-hidden": "true" }, " ↗")),
+      ),
   );
 }
 
